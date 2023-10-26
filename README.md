@@ -1,4 +1,4 @@
-# TPSER (tp-es-er)
+# TPSER (ti-pi-es-er)
 Is a small program to get the block information from any `Ethereum` compatible blockchain network.
 
 The output of this tool, will show some basic information about the blocks, like:   
