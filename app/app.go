@@ -10,39 +10,23 @@ import (
 	"go.uber.org/fx"
 )
 
-type App interface {
-	Run()
-}
-
-type app struct {
-	fx  *fx.App
-	eth eth.Eth
-}
-
-func New() App {
-	a := &app{}
-	a.fx = fx.New(
+func Run() {
+	fx.New(
 		fx.Provide(
 			context.Background,
 			logger.New,
 			conf.New,
 			eth.New,
 		),
-		fx.Invoke(a.newApp),
+		fx.Invoke(mainApp),
 		fx.NopLogger,
-	)
-
-	return a
+	).Run()
 }
 
-func (a *app) newApp(_ fx.Lifecycle, eth eth.Eth, log logger.Logger) {
+func mainApp(eth eth.Eth, log logger.Logger) {
 	if err := eth.Run(); err != nil {
 		log.Fatalln("Could not run application", "err", err.Error())
 	}
-	
-	os.Exit(0)
-}
 
-func (a *app) Run() {
-	a.fx.Run()
+	os.Exit(0)
 }
