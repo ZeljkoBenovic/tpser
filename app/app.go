@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 
-	"github.com/ZeljkoBenovic/tpser/conf"
-	"github.com/ZeljkoBenovic/tpser/eth"
-	"github.com/ZeljkoBenovic/tpser/logger"
+	"github.com/ZeljkoBenovic/tpser/pkg/conf"
+	"github.com/ZeljkoBenovic/tpser/pkg/eth"
+	"github.com/ZeljkoBenovic/tpser/pkg/logger"
 	"go.uber.org/fx"
 )
 
@@ -35,20 +35,11 @@ func New() App {
 	return a
 }
 
-func (a *app) newApp(_ fx.Lifecycle, eth eth.Eth) {
-	//lc.Append(fx.Hook{
-	//	OnStart: func(ctx context.Context) error {
-	//		go func() {
-	//			eth.RunStressTest()
-	//
-	//		}()
-	//
-	//		return nil
-	//	},
-	//	OnStop: nil,
-	//})
-
-	eth.GetBlockByNumberStats()
+func (a *app) newApp(_ fx.Lifecycle, eth eth.Eth, log logger.Logger) {
+	if err := eth.Run(); err != nil {
+		log.Fatalln("Could not run application", "err", err.Error())
+	}
+	
 	os.Exit(0)
 }
 
