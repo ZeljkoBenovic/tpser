@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/modules/getblocks"
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/modules/longsender"
+	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
+	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/longsender"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
 
 	"github.com/ethereum/go-ethereum/ethclient"
