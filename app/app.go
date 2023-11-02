@@ -14,7 +14,7 @@ func Run() {
 	fx.New(
 		fx.Provide(
 			context.Background,
-			logger.New,
+			logger.NewLogrusLogger,
 			conf.New,
 			eth.New,
 		),
