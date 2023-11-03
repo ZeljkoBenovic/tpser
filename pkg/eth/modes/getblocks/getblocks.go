@@ -2,7 +2,6 @@ package getblocks
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -18,65 +17,57 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-type RunConfig struct {
-	StartBlock int64
-	EndBlock   int64
-}
-
-var (
-	ErrConfigTypeNotSupported = errors.New("specified config type not supported")
-)
-
-type getblocks struct {
+type GetBlocks struct {
 	ctx  context.Context
 	log  logger.Logger
 	eth  *ethclient.Client
 	conf conf.Conf
+
+	wg      sync.WaitGroup
+	blocks  []types.BlockInfo
+	limiter chan struct{}
 }
 
-func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) *getblocks {
-	return &getblocks{
-		ctx:  ctx,
-		log:  log.Named("getblocks"),
-		eth:  eth,
-		conf: conf,
+func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) *GetBlocks {
+	return &GetBlocks{
+		ctx:     ctx,
+		log:     log.Named("getblocks"),
+		eth:     eth,
+		conf:    conf,
+		wg:      sync.WaitGroup{},
+		blocks:  make([]types.BlockInfo, 0),
+		limiter: make(chan struct{}, runtime.NumCPU()*50),
 	}
 }
 
-func (g *getblocks) RunMode() error {
-	fmt.Printf("START: %d END: %d", g.conf.Blocks.Start, g.conf.Blocks.End)
+func (g *GetBlocks) RunMode() error {
 	return g.GetBlocksByNumbers(g.conf.Blocks.Start, g.conf.Blocks.End)
 }
 
-func (g *getblocks) GetBlocksByNumbers(startBlock, endBlock int64) error {
+func (g *GetBlocks) GetBlocksByNumbers(startBlock, endBlock int64) error {
 	s := spinner.New(spinner.CharSets[35], 500*time.Millisecond)
 	s.Start()
 
-	blockMap := make([]types.BlockInfo, (endBlock-startBlock)+1)
-	wg := sync.WaitGroup{}
-	limiter := make(chan struct{}, runtime.NumCPU()*10)
-	startingBlock := startBlock - 1
+	for i := startBlock; i <= endBlock; i++ {
+		g.limiter <- struct{}{}
+		g.wg.Add(1)
 
-	for i := int64(0); i <= endBlock-startingBlock; i++ {
-		limiter <- struct{}{}
-		startingBlock++
-		wg.Add(1)
-
-		go g.getBlockByNumberInfo(startingBlock, &blockMap[i], &wg, limiter)
+		go g.getBlockByNumberInfo(i)
 	}
 
-	wg.Wait()
+	g.wg.Wait()
 	s.Stop()
 
-	g.outputStats(blockMap)
+	g.sortBlocks()
+	g.outputStats()
 
 	return nil
 }
 
-func (g *getblocks) getBlockByNumberInfo(blockNumber int64, dest *types.BlockInfo, wg *sync.WaitGroup, limiter <-chan struct{}) {
+func (g *GetBlocks) getBlockByNumberInfo(blockNumber int64) {
 	defer func() {
-		<-limiter
-		wg.Done()
+		<-g.limiter
+		g.wg.Done()
 	}()
 
 	block, err := g.eth.BlockByNumber(g.ctx, big.NewInt(blockNumber))
@@ -84,20 +75,22 @@ func (g *getblocks) getBlockByNumberInfo(blockNumber int64, dest *types.BlockInf
 		g.log.Error("Could not fetch block", "number", blockNumber, "err", err.Error())
 	}
 
-	dest.Number = block.NumberU64()
-	dest.Time = block.Time()
-	dest.GasLimit = block.GasLimit()
-	dest.GasUsed = block.GasUsed()
-	dest.Hash = block.Hash().String()
-	dest.TransactionNum = block.Transactions().Len()
+	g.blocks = append(g.blocks, types.BlockInfo{
+		TransactionNum: block.Transactions().Len(),
+		GasLimit:       block.GasLimit(),
+		GasUsed:        block.GasUsed(),
+		Hash:           block.Hash().String(),
+		Number:         block.NumberU64(),
+		Time:           block.Time(),
+	})
 }
 
-func (g *getblocks) outputStats(blocks []types.BlockInfo) {
+func (g *GetBlocks) outputStats() {
 	totalTxs := uint64(0)
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"TIME", "NUMBER", "TXS", "GAS_LIMIT", "GAS_USED"})
 
-	for _, block := range blocks {
+	for _, block := range g.blocks {
 		blTime := time.Unix(int64(block.Time), 0)
 
 		table.Append([]string{
@@ -111,12 +104,31 @@ func (g *getblocks) outputStats(blocks []types.BlockInfo) {
 		totalTxs += uint64(block.TransactionNum)
 	}
 
-	g.calculateTPS(totalTxs, blocks, table)
+	g.calculateTPS(totalTxs, g.blocks, table)
 
 	table.Render()
 }
 
-func (g *getblocks) calculateTPS(totalTxs uint64, blocks []types.BlockInfo, table *tablewriter.Table) {
+// simple bubble sort O(n^2)
+func (g *GetBlocks) sortBlocks() {
+	var done = false
+
+	for !done {
+		done = true
+
+		for i := 0; i < len(g.blocks)-1; i++ {
+			if g.blocks[i].Number > g.blocks[i+1].Number {
+				first := &g.blocks[i]
+				second := &g.blocks[i+1]
+				*first, *second = g.blocks[i+1], g.blocks[i]
+
+				done = false
+			}
+		}
+	}
+}
+
+func (g *GetBlocks) calculateTPS(totalTxs uint64, blocks []types.BlockInfo, table *tablewriter.Table) {
 	timeStart := time.Unix(int64(blocks[0].Time), 0)
 	timeFinish := time.Unix(int64(blocks[len(blocks)-1].Time), 0)
 	totalTimeToComplete := timeFinish.Sub(timeStart)

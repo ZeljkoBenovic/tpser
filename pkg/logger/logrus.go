@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -62,7 +63,10 @@ func (l *log) Named(_ string) Logger {
 	return l
 }
 
-func NewLogrusLogger() Logger {
+func NewLogrusLogger(conf conf.Conf) Logger {
+	lvl, _ := logrus.ParseLevel(conf.LogLevel)
+	logrus.SetLevel(lvl)
+
 	return &log{
 		log: logrus.StandardLogger(),
 	}

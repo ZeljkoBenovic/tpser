@@ -4,8 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-
-	"github.com/ZeljkoBenovic/tpser/pkg/logger"
+	"log"
 )
 
 type Mode string
@@ -20,9 +19,18 @@ const (
 )
 
 type Conf struct {
-	Mode    Mode
-	JsonRPC string
-	Blocks  Blocks
+	Mode Mode
+
+	JsonRPC  string
+	Blocks   Blocks
+	LogLevel string
+
+	PrivateKey string
+	ToAddress  string
+
+	TxPerSec         int64
+	TxSendTimeoutMin int64
+	IncludeTPSReport bool
 }
 
 type Blocks struct {
@@ -31,31 +39,47 @@ type Blocks struct {
 }
 
 var (
-	ErrJsonRPCNotDefined  = errors.New("json-rpc endpoint not defined")
-	ErrEndBlockNotDefined = errors.New("end block not defined")
+	ErrJsonRPCNotDefined       = errors.New("json-rpc endpoint not defined")
+	ErrEndBlockNotDefined      = errors.New("end block not defined")
+	ErrPrivKeyToAddrNotDefined = errors.New("to address and private key must be set")
 )
 
 type rawConf struct {
-	jsonRpc    string
+	mode     string
+	jsonRpc  string
+	logLevel string
+
 	blockStart int64
 	blockEnd   int64
-	mode       string
+
+	privKey string
+	toAddr  string
+
+	txPerSec         int64
+	txSendTimeoutMin int64
+	includeTpsReport bool
 }
 
-func New(logger logger.Logger) (Conf, error) {
+func New() (Conf, error) {
 	raw := &rawConf{}
 	conf, err := raw.getConfig()
 	if err != nil {
-		logger.Fatalln("Could not initialize config", "err", err.Error())
+		log.Fatalln("Could not initialize config", "err", err.Error())
 	}
 
 	return conf, nil
 }
 
 func (c *rawConf) getConfig() (Conf, error) {
+	flag.StringVar(&c.logLevel, "log-level", "info", "log output level")
 	flag.StringVar(&c.jsonRpc, "json-rpc", "", "JSON-RPC or WS endpoint")
 	flag.Int64Var(&c.blockStart, "block-start", 1, "the start block range")
 	flag.Int64Var(&c.blockEnd, "block-end", 0, "the end block range")
+	flag.StringVar(&c.privKey, "priv-key", "", "the private key for the sender account")
+	flag.StringVar(&c.toAddr, "to", "", "address to which the funds will be sent")
+	flag.Int64Var(&c.txPerSec, "tx-per-sec", 100, "the number of transactions per second to send")
+	flag.Int64Var(&c.txSendTimeoutMin, "tx-send-timeout", 60, "the number of minutes after witch to stop the send")
+	flag.BoolVar(&c.includeTpsReport, "include-tps-report", false, "set to true to include tps report after the long-sender node")
 	flag.StringVar(
 		&c.mode,
 		"mode",
@@ -71,12 +95,22 @@ func (c *rawConf) getConfig() (Conf, error) {
 		return Conf{}, ErrEndBlockNotDefined
 	}
 
+	if c.mode == LongSender.String() && c.toAddr == "" || c.privKey == "" {
+		return Conf{}, ErrPrivKeyToAddrNotDefined
+	}
+
 	return Conf{
 		JsonRPC: c.jsonRpc,
 		Blocks: Blocks{
 			Start: c.blockStart,
 			End:   c.blockEnd,
 		},
-		Mode: Mode(c.mode),
+		Mode:             Mode(c.mode),
+		PrivateKey:       c.privKey,
+		ToAddress:        c.toAddr,
+		TxPerSec:         c.txPerSec,
+		TxSendTimeoutMin: c.txSendTimeoutMin,
+		LogLevel:         c.logLevel,
+		IncludeTPSReport: c.includeTpsReport,
 	}, nil
 }
