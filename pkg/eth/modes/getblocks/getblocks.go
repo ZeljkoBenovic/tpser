@@ -41,7 +41,20 @@ func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf con
 }
 
 func (g *GetBlocks) RunMode() error {
-	return g.GetBlocksByNumbers(g.conf.Blocks.Start, g.conf.Blocks.End)
+	startBlock := g.conf.Blocks.Start
+	endBlock := g.conf.Blocks.End
+
+	if g.conf.Blocks.Range != 0 {
+		latestBlock, err := g.eth.BlockNumber(g.ctx)
+		if err != nil {
+			return fmt.Errorf("could not get latest block: %w", err)
+		}
+
+		endBlock = int64(latestBlock)
+		startBlock = endBlock - g.conf.Blocks.Range
+	}
+
+	return g.GetBlocksByNumbers(startBlock, endBlock)
 }
 
 func (g *GetBlocks) GetBlocksByNumbers(startBlock, endBlock int64) error {

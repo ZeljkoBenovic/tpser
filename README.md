@@ -35,32 +35,40 @@ was running for a long time, as there can be a huge number of blocks with transa
 ## Usage
 
 ### Common Flags
-* `-json-rpc` - the ethernet `json-rpc` http endpoint
-* `-log-level` - the log level output 
+* `-json-rpc` - the ethernet `json-rpc` http(s)/ws(s) endpoint
+* `-log-level` - the log level output - default: info
   * `info`
   * `debug`
 * `-mode` - the mode of operation:
   * `blocks-fetcher` - runs in the BlockFetcher mode
   * `long-sender` - runs in the LongSender mode
-* `-priv-key` - the private key of the account that has funds
-* `-to` - the account to which the funds will be sent
+
 
 ### BlocksFetcher
+#### BlockStart/BlockEnd
 * `-block-start` - the starting block
 * `-block-end` - the end block
 
 ```bash
 tpser \
     -mode blocks-fetcher \   
-    -json-rpc <JSON-RPC URL>      
-    -priv-key <PRIVATE_KEY> \
-    -to <ADDRESS> \
+    -json-rpc <JSON-RPC URL> \     
     -block-start <START_BLOCK_NUMBER> \
     -block-end <END_BLOCK_NUMBER>
 ```   
 *if `block-start` is omitted, it will be set to block `1`*
 
+#### BlockRange
+* `-block-range` - fetch a defined range of blocks, starting from the latest available
+
+```bash
+go run . -json-rpc <JSON_RPC_URL> -block-range <RANGE_OF_BLOCKS>
+```
+*blocks-fetcher is default mode, so the flag can be omitted*
+
 ### LongSender
+* `-priv-key` - the private key of the account that has funds
+* `-to` - the account to which the funds will be sent
 * `-include-tps-report <bool>` - should the final TPS report be generated
 * `-tx-per-sec` - how much transactions per second will be sent
 * `-tx-send-timeout` - time in minutes of how long the `long-sender` will run
@@ -74,3 +82,15 @@ tpser \
     -tx-per-sec <NUMBER_OF_TX_PER_SEC> \
     -tx-send-timeout <DURATION_OF_THE_TEST_IN_MIN>
 ```
+
+LongSender mode can be effectively used to find your blockchain most stable TPS. Its job is to send a defined number
+of transactions every second for a specified duration. If your blockchain client can handle this load, without any 
+transaction errors, you can feel confident that the specified TPS can be processed in production.     
+
+How would you do this:
+* Run `long-sender` with, for example `-tx-per-sec 300` and `tx-send-timeout 1440`.   
+  This will send 300 transactions every second non-stop for 24h.
+* Periodically check for `long-sender` error output, for any transaction errors
+* Periodically check block utilisation and transactions mined, using`blocks-fetcher` module with `-block-range 100` flag
+* Presuming that block time is set to `2s`, 100 blocks should be processed in 200s, and they should contain
+  `~60 000` transactions (`300tx * 200s (100blocks, each mined in 2s)`) 

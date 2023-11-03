@@ -36,11 +36,12 @@ type Conf struct {
 type Blocks struct {
 	Start int64
 	End   int64
+	Range int64
 }
 
 var (
 	ErrJsonRPCNotDefined       = errors.New("json-rpc endpoint not defined")
-	ErrEndBlockNotDefined      = errors.New("end block not defined")
+	ErrEndBlockNotDefined      = errors.New("end block or block range not defined")
 	ErrPrivKeyToAddrNotDefined = errors.New("to address and private key must be set")
 )
 
@@ -51,6 +52,7 @@ type rawConf struct {
 
 	blockStart int64
 	blockEnd   int64
+	blockRange int64
 
 	privKey string
 	toAddr  string
@@ -64,7 +66,7 @@ func New() (Conf, error) {
 	raw := &rawConf{}
 	conf, err := raw.getConfig()
 	if err != nil {
-		log.Fatalln("Could not initialize config", "err", err.Error())
+		log.Fatalln("Could not initialize config: ", err.Error())
 	}
 
 	return conf, nil
@@ -75,6 +77,7 @@ func (c *rawConf) getConfig() (Conf, error) {
 	flag.StringVar(&c.jsonRpc, "json-rpc", "", "JSON-RPC or WS endpoint")
 	flag.Int64Var(&c.blockStart, "block-start", 1, "the start block range")
 	flag.Int64Var(&c.blockEnd, "block-end", 0, "the end block range")
+	flag.Int64Var(&c.blockRange, "block-range", 0, "the range of blocks to fetch from latest")
 	flag.StringVar(&c.privKey, "priv-key", "", "the private key for the sender account")
 	flag.StringVar(&c.toAddr, "to", "", "address to which the funds will be sent")
 	flag.Int64Var(&c.txPerSec, "tx-per-sec", 100, "the number of transactions per second to send")
@@ -88,15 +91,8 @@ func (c *rawConf) getConfig() (Conf, error) {
 	)
 	flag.Parse()
 
-	if c.jsonRpc == "" {
-		return Conf{}, ErrJsonRPCNotDefined
-	}
-	if c.mode == BlocksFetcher.String() && c.blockEnd == 0 {
-		return Conf{}, ErrEndBlockNotDefined
-	}
-
-	if c.mode == LongSender.String() && c.toAddr == "" || c.privKey == "" {
-		return Conf{}, ErrPrivKeyToAddrNotDefined
+	if err := c.validateRawFlags(); err != nil {
+		return Conf{}, err
 	}
 
 	return Conf{
@@ -104,6 +100,7 @@ func (c *rawConf) getConfig() (Conf, error) {
 		Blocks: Blocks{
 			Start: c.blockStart,
 			End:   c.blockEnd,
+			Range: c.blockRange,
 		},
 		Mode:             Mode(c.mode),
 		PrivateKey:       c.privKey,
@@ -113,4 +110,19 @@ func (c *rawConf) getConfig() (Conf, error) {
 		LogLevel:         c.logLevel,
 		IncludeTPSReport: c.includeTpsReport,
 	}, nil
+}
+
+func (c *rawConf) validateRawFlags() error {
+	if c.jsonRpc == "" {
+		return ErrJsonRPCNotDefined
+	}
+	if c.mode == BlocksFetcher.String() && c.blockEnd == 0 && c.blockRange == 0 {
+		return ErrEndBlockNotDefined
+	}
+
+	if c.mode == LongSender.String() && (c.toAddr == "" || c.privKey == "") {
+		return ErrPrivKeyToAddrNotDefined
+	}
+
+	return nil
 }
