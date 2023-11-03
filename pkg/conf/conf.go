@@ -64,7 +64,7 @@ type rawConf struct {
 
 func New() (Conf, error) {
 	raw := &rawConf{}
-	conf, err := raw.getConfig()
+	conf, err := raw.getConfig(false)
 	if err != nil {
 		log.Fatalln("Could not initialize config: ", err.Error())
 	}
@@ -72,7 +72,7 @@ func New() (Conf, error) {
 	return conf, nil
 }
 
-func (c *rawConf) getConfig() (Conf, error) {
+func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.StringVar(&c.logLevel, "log-level", "info", "log output level")
 	flag.StringVar(&c.jsonRpc, "json-rpc", "", "JSON-RPC or WS endpoint")
 	flag.Int64Var(&c.blockStart, "block-start", 1, "the start block range")
@@ -91,8 +91,10 @@ func (c *rawConf) getConfig() (Conf, error) {
 	)
 	flag.Parse()
 
-	if err := c.validateRawFlags(); err != nil {
-		return Conf{}, err
+	if !test {
+		if err := c.validateRawFlags(); err != nil {
+			return Conf{}, err
+		}
 	}
 
 	return Conf{
