@@ -1,18 +1,76 @@
 # TPSER (ti-pi-es-er)
-Is a small program to get the block information from any `Ethereum` compatible blockchain network.
 
-The output of this tool, will show some basic information about the blocks, like:   
+Is a set of tools dedicated to test the performance of Ethereum compliant blockchain networks.    
+The main goal, is to provide the blockchain operators some insight into its performance.   
+This data can than be used to "fine tune" the blockchain client and possibly improve performance.
+
+## MODES
+
+The `tpser` program consists of only two modes for now, more to be added later.    
+For now, only the EOA transfers are supported. ERC20 and ERC721 will follow soon.
+
+### BlocksFetcher
+The `blocks fetcher` mode fetches the information about the specified range of blocks and 
+shows a nicely formatted table result, with the basic information about the blocks, like:   
 * *timestamp*
 * *block number*
 * *the number of transactions in a block*
 * *block gas size*
 * *block gas utilization*
 
-Finally, the program will show the average **TPS** (transactions per second), **TOTAL TRANSACTIONS** and **TOTAL DURATION**
+Finally, the mode will show the average **TPS** (transactions per second), **TOTAL TRANSACTIONS** and **TOTAL DURATION**
 
 **TPS** is calculated in a very rudimentary fashion, by *dividing* the `total duration` in seconds by the `total number of transactions`
 
+### LongSender
+
+The `long-sender` modes is used for sending a specific number of transactions per second for a set period of time.   
+This is useful when testing the network for stability after the new version has been released, memory leaks, etc.   
+As the transactions can be sent for a long time, operators can get useful data from the blockchain logs and metrics.
+The `long-sender` won't wait for receipts, and as such there is no information about the state of the transactions.
+
+Optionally, the TPS report can be generated, but it's not advisable to do so if the `long-sender` 
+was running for a long time, as there can be a huge number of blocks with transactions.
 
 ## Usage
-`tpser -json-rpc <JSON-RPC URL> -block-start <START_BLOCK_NUMBER> -block-end <END_BLOCK_NUMBER>`     
+
+### Common Flags
+* `-json-rpc` - the ethernet `json-rpc` http endpoint
+* `-log-level` - the log level output 
+  * `info`
+  * `debug`
+* `-mode` - the mode of operation:
+  * `blocks-fetcher` - runs in the BlockFetcher mode
+  * `long-sender` - runs in the LongSender mode
+* `-priv-key` - the private key of the account that has funds
+* `-to` - the account to which the funds will be sent
+
+### BlocksFetcher
+* `-block-start` - the starting block
+* `-block-end` - the end block
+
+```bash
+tpser \
+    -mode blocks-fetcher \   
+    -json-rpc <JSON-RPC URL>      
+    -priv-key <PRIVATE_KEY> \
+    -to <ADDRESS> \
+    -block-start <START_BLOCK_NUMBER> \
+    -block-end <END_BLOCK_NUMBER>
+```   
 *if `block-start` is omitted, it will be set to block `1`*
+
+### LongSender
+* `-include-tps-report <bool>` - should the final TPS report be generated
+* `-tx-per-sec` - how much transactions per second will be sent
+* `-tx-send-timeout` - time in minutes of how long the `long-sender` will run
+
+```bash
+tpser \
+    -mode long-sender \   
+    -json-rpc <JSON-RPC URL>      
+    -priv-key <PRIVATE_KEY> \
+    -to <ADDRESS> \
+    -tx-per-sec <NUMBER_OF_TX_PER_SEC> \
+    -tx-send-timeout <DURATION_OF_THE_TEST_IN_MIN>
+```
