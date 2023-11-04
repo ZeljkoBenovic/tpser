@@ -14,6 +14,12 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+type txSignerEthClient interface {
+	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
+	SuggestGasPrice(ctx context.Context) (*big.Int, error)
+	ChainID(ctx context.Context) (*big.Int, error)
+}
+
 var (
 	ErrPubKey = errors.New("could not get public key from private")
 )
@@ -27,7 +33,7 @@ var (
 type TxSigner struct {
 	ctx context.Context
 	log logger.Logger
-	eth *ethclient.Client
+	eth txSignerEthClient
 
 	privateKey *ecdsa.PrivateKey
 	publicKey  *ecdsa.PublicKey
