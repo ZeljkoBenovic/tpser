@@ -18,8 +18,14 @@ jobs:
       - name: Install dependencies
         run: go get .
 
-      - name: Test with the Go CLI
-        run: go test -v -cover -race ./...
+      - name: Test with race enabled
+        run: go test -v -cover -race ./... | tee test.log
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: tpser-test-logs
+          path: ./test.log
+          retention-days: 3
 
   build:
     runs-on: ubuntu-latest
@@ -36,5 +42,11 @@ jobs:
     - name: Install dependencies
       run: go get .
 
-    - name: Test with the Go CLI
-      run: go build -v -race .
+    - name: Build with race enabled
+      run: go build -v -race -o tpser .
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: tpser-linux-binary
+        path: ./tpser
+        retention-days: 3
