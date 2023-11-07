@@ -42,8 +42,11 @@ jobs:
     - name: Install dependencies
       run: go get .
 
-    - name: Build with race enabled
+    - name: Test for race condition
       run: go build -v -race -o tpser .
+
+    - name: Build
+      run: CGO_ENABLED=0 go build -v -o tpser .
 
     - uses: actions/upload-artifact@v3
       with:

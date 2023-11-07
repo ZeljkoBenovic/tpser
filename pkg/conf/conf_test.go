@@ -50,34 +50,45 @@ func TestFlagValidation(t *testing.T) {
 	}
 
 	var longSenderFlagsTest = []struct {
-		name    string
-		toAddr  string
-		privKey string
-		want    error
+		name     string
+		toAddr   string
+		privKey  string
+		mnemonic string
+		want     error
 	}{
 		{
-			name:    "Addr and Key not provided",
-			toAddr:  "",
-			privKey: "",
-			want:    ErrPrivKeyToAddrNotDefined,
+			name:     "Addr and Key and Mnemonic not provided",
+			toAddr:   "",
+			privKey:  "",
+			mnemonic: "",
+			want:     ErrToAddrNotProvided,
 		},
 		{
-			name:    "Addr provided Key not provided",
-			toAddr:  "0x124155436436",
-			privKey: "",
-			want:    ErrPrivKeyToAddrNotDefined,
+			name:     "Addr provided Key and Mnemonic not provided",
+			toAddr:   "0x124155436436",
+			privKey:  "",
+			mnemonic: "",
+			want:     ErrPrivKeyOrMnemonicNotProvided,
 		},
 		{
-			name:    "Add not provided Key provided",
-			toAddr:  "",
-			privKey: "jnkdfv-2j42-838yhi9-0u9-0",
-			want:    ErrPrivKeyToAddrNotDefined,
+			name:     "Addr not provided Key provided",
+			toAddr:   "",
+			privKey:  "jnkdfv-2j42-838yhi9-0u9-0",
+			mnemonic: "",
+			want:     ErrToAddrNotProvided,
 		},
 		{
 			name:    "Both to addr and key provided",
 			toAddr:  "0x21415545435",
 			privKey: "fjndksafpj9f[m2-jgfi42-9",
 			want:    nil,
+		},
+		{
+			name:     "Addr and mnemonic provided",
+			toAddr:   "0x12354135564",
+			privKey:  "",
+			mnemonic: "test test test",
+			want:     nil,
 		},
 	}
 
@@ -109,10 +120,12 @@ func TestFlagValidation(t *testing.T) {
 			cnf.mode = LongSender.String()
 			cnf.toAddr = tt.toAddr
 			cnf.privKey = tt.privKey
+			cnf.mnemonic = tt.mnemonic
 
 			lErr := cnf.validateRawFlags()
 			if lErr != tt.want {
 				t.Errorf("long-sender flags test not passed")
+				t.Logf("ERR: %s", lErr.Error())
 			}
 		})
 	}

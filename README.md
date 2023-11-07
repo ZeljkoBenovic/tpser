@@ -42,9 +42,14 @@ was running for a long time, as there can be a huge number of blocks with transa
 * `-mode` - the mode of operation:
   * `blocks-fetcher` - runs in the BlockFetcher mode
   * `long-sender` - runs in the LongSender mode
+* `-duration` - time in minutes of how long the `long-sender` will run
+* `-to` - the account to which the funds will be sent
+* `-report <bool>` - should the final TPS report be generated
+* `-tps` - how much transactions per second will be sent
 
 
 ### BlocksFetcher
+
 #### BlockStart/BlockEnd
 * `-block-start` - the starting block
 * `-block-end` - the end block
@@ -67,28 +72,41 @@ go run . -json-rpc <JSON_RPC_URL> -block-range <RANGE_OF_BLOCKS>
 *blocks-fetcher is default mode, so the flag can be omitted*
 
 ### LongSender
-* `-priv-key` - the private key of the account that has funds
-* `-to` - the account to which the funds will be sent
-* `-include-tps-report <bool>` - should the final TPS report be generated
-* `-tx-per-sec` - how much transactions per second will be sent
-* `-tx-send-timeout` - time in minutes of how long the `long-sender` will run
+
+#### Using private key
+* `-pk` - the private key of the account that has funds
 
 ```bash
 tpser \
     -mode long-sender \   
     -json-rpc <JSON-RPC URL>      
-    -priv-key <PRIVATE_KEY> \
+    -pk <PRIVATE_KEY> \
     -to <ADDRESS> \
-    -tx-per-sec <NUMBER_OF_TX_PER_SEC> \
-    -tx-send-timeout <DURATION_OF_THE_TEST_IN_MIN>
+    -tps <NUMBER_OF_TX_PER_SEC> \
+    -duration <DURATION_OF_THE_TEST_IN_MIN>
 ```
+
+#### Using mnemonic
+* `-mnemonic` - the mnemonic string used to derive accounts
+* `-mnemonic-addr` - the number of derived accounts to use, starting from 0
+```bash
+tpser \
+    -mode long-sender \   
+    -json-rpc <JSON-RPC URL>      
+    -mnemonic <MNEMONIC_STRING> \
+    -mnemonic-addr <NUMBER_OF_ACCOUNTS> \
+    -to <ADDRESS> \
+    -tps <NUMBER_OF_TX_PER_SEC> \
+    -duration <DURATION_OF_THE_TEST_IN_MIN>
+```
+
 
 LongSender mode can be effectively used to find your blockchain most stable TPS. Its job is to send a defined number
 of transactions every second for a specified duration. If your blockchain client can handle this load, without any 
 transaction errors, you can feel confident that the specified TPS can be processed in production.     
 
 How would you do this:
-* Run `long-sender` with, for example `-tx-per-sec 300` and `tx-send-timeout 1440`.   
+* Run `long-sender` with, for example `-tps 300` and `-timeout 1440`.   
   This will send 300 transactions every second non-stop for 24h.
 * Periodically check for `long-sender` error output, for any transaction errors
 * Periodically check block utilisation and transactions mined, using`blocks-fetcher` module with `-block-range 100` flag

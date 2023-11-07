@@ -26,6 +26,7 @@ func New(ctx context.Context, log logger.Logger, eth *ethclient.Client) *TxSende
 
 func (t *TxSender) SendSignedTransaction(signedTx *types.Transaction) (common.Hash, error) {
 	if err := t.eth.SendTransaction(t.ctx, signedTx); err != nil {
+		t.log.Debug("Could not send transaction", "err", err, "tx_hash", signedTx.Hash())
 		return common.Hash{}, fmt.Errorf("could not send transacton: %w", err)
 	}
 

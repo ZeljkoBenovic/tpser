@@ -15,6 +15,7 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/olekukonko/tablewriter"
+	"golang.org/x/sync/errgroup"
 )
 
 type GetBlocks struct {
@@ -23,20 +24,24 @@ type GetBlocks struct {
 	eth  *ethclient.Client
 	conf conf.Conf
 
-	wg      sync.WaitGroup
-	blocks  []types.BlockInfo
-	limiter chan struct{}
+	errGr  errgroup.Group
+	blocks []types.BlockInfo
+
+	mux sync.Mutex
 }
 
 func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) *GetBlocks {
+	eg := errgroup.Group{}
+	eg.SetLimit(runtime.NumCPU() * 50)
+
 	return &GetBlocks{
-		ctx:     ctx,
-		log:     log.Named("getblocks"),
-		eth:     eth,
-		conf:    conf,
-		wg:      sync.WaitGroup{},
-		blocks:  make([]types.BlockInfo, 0),
-		limiter: make(chan struct{}, runtime.NumCPU()*50),
+		ctx:    ctx,
+		log:    log.Named("getblocks"),
+		eth:    eth,
+		conf:   conf,
+		errGr:  errgroup.Group{},
+		blocks: make([]types.BlockInfo, 0),
+		mux:    sync.Mutex{},
 	}
 }
 
@@ -62,13 +67,15 @@ func (g *GetBlocks) GetBlocksByNumbers(startBlock, endBlock int64) error {
 	s.Start()
 
 	for i := startBlock; i <= endBlock; i++ {
-		g.limiter <- struct{}{}
-		g.wg.Add(1)
-
-		go g.getBlockByNumberInfo(i)
+		i := i
+		g.errGr.Go(func() error {
+			return g.getBlockByNumberInfo(i)
+		})
 	}
 
-	g.wg.Wait()
+	if err := g.errGr.Wait(); err != nil {
+		return err
+	}
 	s.Stop()
 
 	g.sortBlocks()
@@ -77,17 +84,14 @@ func (g *GetBlocks) GetBlocksByNumbers(startBlock, endBlock int64) error {
 	return nil
 }
 
-func (g *GetBlocks) getBlockByNumberInfo(blockNumber int64) {
-	defer func() {
-		<-g.limiter
-		g.wg.Done()
-	}()
-
+func (g *GetBlocks) getBlockByNumberInfo(blockNumber int64) error {
 	block, err := g.eth.BlockByNumber(g.ctx, big.NewInt(blockNumber))
 	if err != nil {
 		g.log.Error("Could not fetch block", "number", blockNumber, "err", err.Error())
+		return err
 	}
 
+	g.mux.Lock()
 	g.blocks = append(g.blocks, types.BlockInfo{
 		TransactionNum: block.Transactions().Len(),
 		GasLimit:       block.GasLimit(),
@@ -96,6 +100,9 @@ func (g *GetBlocks) getBlockByNumberInfo(blockNumber int64) {
 		Number:         block.NumberU64(),
 		Time:           block.Time(),
 	})
+	g.mux.Unlock()
+
+	return nil
 }
 
 func (g *GetBlocks) outputStats() {

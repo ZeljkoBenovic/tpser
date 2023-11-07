@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ZeljkoBenovic/tpser/pkg/conf"
+	"github.com/ZeljkoBenovic/tpser/pkg/logger"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -71,7 +73,9 @@ func TestTxSigner_SetPrivateKey(t *testing.T) {
 	}
 	for _, tt := range privKeyTests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := txs.SetPrivateKey(tt.privKeyInput)
+			txs.conf.PrivateKey = tt.privKeyInput
+
+			err := txs.SetPrivateKey()
 			if tt.shouldError {
 				assert.NotNil(t, err)
 			} else {
@@ -89,6 +93,10 @@ func TestTxSigner_SetToAddress(t *testing.T) {
 	tx := TxSigner{
 		eth: ethClientMock{},
 		ctx: context.Background(),
+		log: logger.NewZapLogger(),
+		conf: conf.Conf{
+			PrivateKey: "t3stK3y",
+		},
 	}
 
 	testPrivKey, _ := crypto.GenerateKey()
@@ -98,6 +106,7 @@ func TestTxSigner_SetToAddress(t *testing.T) {
 	var setToAddressTests = []struct {
 		name         string
 		toAddrString string
+		fromAddr     common.Address
 		wantNonce    uint64
 		wantGasPrice *big.Int
 		wantGasLimit uint64
@@ -108,6 +117,7 @@ func TestTxSigner_SetToAddress(t *testing.T) {
 		{
 			name:         "Valid address",
 			toAddrString: testToAddress.Hex(),
+			fromAddr:     testToAddress,
 			wantNonce:    10,
 			wantGasPrice: big.NewInt(100),
 			wantGasLimit: EOAGasLimit,
@@ -119,6 +129,8 @@ func TestTxSigner_SetToAddress(t *testing.T) {
 
 	for _, tt := range setToAddressTests {
 		t.Run(tt.name, func(t *testing.T) {
+			tx.from = tt.fromAddr
+
 			err := tx.SetToAddress(tt.toAddrString)
 			if tt.shouldErr {
 				assert.NotNil(t, err)
@@ -204,5 +216,52 @@ func TestTxSigner_GetNextSignedTx(t *testing.T) {
 				assert.NotEqual(t, tx1.Hash().String(), tx2.Hash().String())
 			}
 		})
+	}
+}
+
+func TestTxSigner_getPrivateKeyFromMnemonicDerivedNumber(t *testing.T) {
+	var keysMap = make(map[int]string)
+
+	testScenarios := []struct {
+		name      string
+		shouldErr bool
+		accNumber int
+		mnemonic  string
+	}{
+		{
+			name:      "Should generate random 0-5 account",
+			shouldErr: false,
+			accNumber: 1,
+			mnemonic:  "tag volcano eight thank tide danger coast health above argue embrace heavy",
+		},
+		{
+			name:      "Should generate random 0-5 account",
+			shouldErr: false,
+			accNumber: 2,
+			mnemonic:  "tag volcano eight thank tide danger coast health above argue embrace heavy",
+		},
+		{
+			name:      "Empty mnemonic",
+			shouldErr: true,
+			mnemonic:  "",
+		},
+	}
+
+	for _, tt := range testScenarios {
+		tx := TxSigner{
+			conf: conf.Conf{Mnemonic: tt.mnemonic},
+		}
+
+		t.Run(tt.name, func(t *testing.T) {
+			accPrivKey, err := tx.getPrivateKeyFromMnemonicDerivedNumber(tt.accNumber)
+			if tt.shouldErr {
+				assert.NotNil(t, err)
+			} else {
+				pkBytes := crypto.FromECDSA(accPrivKey)
+				keysMap[tt.accNumber] = hexutil.Encode(pkBytes)
+			}
+		})
+
+		assert.NotEqual(t, keysMap[1], keysMap[2])
 	}
 }

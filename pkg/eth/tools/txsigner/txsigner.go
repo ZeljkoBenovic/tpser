@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	hdwallet "github.com/miguelmota/go-ethereum-hdwallet"
 )
 
 type txSignerEthClient interface {
@@ -21,7 +23,8 @@ type txSignerEthClient interface {
 }
 
 var (
-	ErrPubKey = errors.New("could not get public key from private")
+	ErrPubKey                  = errors.New("could not get public key from private")
+	ErrPKOrMnemonicNotProvided = errors.New("private key or mnemonic not provided")
 )
 
 var (
@@ -31,9 +34,10 @@ var (
 )
 
 type TxSigner struct {
-	ctx context.Context
-	log logger.Logger
-	eth txSignerEthClient
+	ctx  context.Context
+	log  logger.Logger
+	eth  txSignerEthClient
+	conf conf.Conf
 
 	privateKey *ecdsa.PrivateKey
 	publicKey  *ecdsa.PublicKey
@@ -45,18 +49,53 @@ type TxSigner struct {
 	chainId    *big.Int
 }
 
-func New(ctx context.Context, log logger.Logger, eth *ethclient.Client) *TxSigner {
-	return &TxSigner{
-		ctx: ctx,
-		log: log,
-		eth: eth,
+type Options struct {
+	NumberOfAccounts int
+}
+
+type SignerOpts func(*Options)
+
+func WithNumberOfAccounts(accNo int) SignerOpts {
+	return func(options *Options) {
+		options.NumberOfAccounts = accNo
 	}
 }
 
-func (t *TxSigner) SetPrivateKey(privKey string) error {
-	pk, err := crypto.HexToECDSA(privKey)
-	if err != nil {
-		return fmt.Errorf("could not setup private key: %w", err)
+func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) *TxSigner {
+	return &TxSigner{
+		ctx:  ctx,
+		log:  log,
+		eth:  eth,
+		conf: conf,
+	}
+}
+
+func (t *TxSigner) SetPrivateKey(opts ...SignerOpts) error {
+	var (
+		pk  *ecdsa.PrivateKey
+		err error
+	)
+
+	o := &Options{
+		NumberOfAccounts: 1,
+	}
+	for _, f := range opts {
+		f(o)
+	}
+
+	if t.conf.PrivateKey != "" {
+		pk, err = crypto.HexToECDSA(t.conf.PrivateKey)
+		if err != nil {
+			return fmt.Errorf("could not setup private key: %w", err)
+		}
+	}
+
+	if t.conf.Mnemonic != "" {
+		pk, err = t.getPrivateKeyFromMnemonicDerivedNumber(o.NumberOfAccounts)
+	}
+
+	if t.conf.PrivateKey == "" && t.conf.Mnemonic == "" {
+		return ErrPKOrMnemonicNotProvided
 	}
 
 	pubKey, ok := pk.Public().(*ecdsa.PublicKey)
@@ -76,6 +115,8 @@ func (t *TxSigner) SetToAddress(toAddressString string) error {
 	if err != nil {
 		return fmt.Errorf("could not get pending nonce: %w", err)
 	}
+
+	t.log.Debug("Pending nonce fetched", "nonce", nonce, "from", t.from.String())
 
 	gas, err := t.eth.SuggestGasPrice(t.ctx)
 	if err != nil {
@@ -117,4 +158,23 @@ func (t *TxSigner) GetNextSignedTx(nextNonce uint64) (*types.Transaction, error)
 	}
 
 	return tx, nil
+}
+
+func (t *TxSigner) GetFromAddress() string {
+	return t.from.String()
+}
+
+func (t *TxSigner) getPrivateKeyFromMnemonicDerivedNumber(accNo int) (*ecdsa.PrivateKey, error) {
+	wallet, err := hdwallet.NewFromMnemonic(t.conf.Mnemonic)
+	if err != nil {
+		return nil, fmt.Errorf("could not process mnemonic: %w", err)
+	}
+
+	path := hdwallet.MustParseDerivationPath(fmt.Sprintf("m/44'/60'/0'/0/%d", accNo))
+	account, err := wallet.Derive(path, false)
+	if err != nil {
+		return nil, fmt.Errorf("could not derive account from mnemonic: %w", err)
+	}
+
+	return wallet.PrivateKey(account)
 }

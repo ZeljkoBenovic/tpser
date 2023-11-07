@@ -25,8 +25,10 @@ type Conf struct {
 	Blocks   Blocks
 	LogLevel string
 
-	PrivateKey string
-	ToAddress  string
+	PrivateKey    string
+	Mnemonic      string
+	TotalAccounts int
+	ToAddress     string
 
 	TxPerSec         int64
 	TxSendTimeoutMin int64
@@ -40,9 +42,10 @@ type Blocks struct {
 }
 
 var (
-	ErrJsonRPCNotDefined       = errors.New("json-rpc endpoint not defined")
-	ErrEndBlockNotDefined      = errors.New("end block or block range not defined")
-	ErrPrivKeyToAddrNotDefined = errors.New("to address and private key must be set")
+	ErrJsonRPCNotDefined            = errors.New("json-rpc endpoint not defined")
+	ErrEndBlockNotDefined           = errors.New("end block or block range not defined")
+	ErrToAddrNotProvided            = errors.New("to address not provided")
+	ErrPrivKeyOrMnemonicNotProvided = errors.New("private key or mnemonic not provided")
 )
 
 type rawConf struct {
@@ -54,8 +57,10 @@ type rawConf struct {
 	blockEnd   int64
 	blockRange int64
 
-	privKey string
-	toAddr  string
+	privKey       string
+	mnemonic      string
+	totalAccounts int
+	toAddr        string
 
 	txPerSec         int64
 	txSendTimeoutMin int64
@@ -78,11 +83,13 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.Int64Var(&c.blockStart, "block-start", 1, "the start block range")
 	flag.Int64Var(&c.blockEnd, "block-end", 0, "the end block range")
 	flag.Int64Var(&c.blockRange, "block-range", 0, "the range of blocks to fetch from latest")
-	flag.StringVar(&c.privKey, "priv-key", "", "the private key for the sender account")
+	flag.StringVar(&c.privKey, "pk", "", "the private key for the sender account")
 	flag.StringVar(&c.toAddr, "to", "", "address to which the funds will be sent")
-	flag.Int64Var(&c.txPerSec, "tx-per-sec", 100, "the number of transactions per second to send")
-	flag.Int64Var(&c.txSendTimeoutMin, "tx-send-timeout", 60, "the number of minutes after witch to stop the send")
-	flag.BoolVar(&c.includeTpsReport, "include-tps-report", false, "set to true to include tps report after the long-sender node")
+	flag.Int64Var(&c.txPerSec, "tps", 100, "the number of transactions per second to send")
+	flag.Int64Var(&c.txSendTimeoutMin, "duration", 60, "the number of minutes after witch to stop the send")
+	flag.BoolVar(&c.includeTpsReport, "report", false, "set to true to include tps report after the long-sender node")
+	flag.StringVar(&c.mnemonic, "mnemonic", "", "mnemonic string to derive accounts from")
+	flag.IntVar(&c.totalAccounts, "mnemonic-addr", 1, "total number of account to send transactions from")
 	flag.StringVar(
 		&c.mode,
 		"mode",
@@ -106,11 +113,13 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 		},
 		Mode:             Mode(c.mode),
 		PrivateKey:       c.privKey,
+		Mnemonic:         c.mnemonic,
 		ToAddress:        c.toAddr,
 		TxPerSec:         c.txPerSec,
 		TxSendTimeoutMin: c.txSendTimeoutMin,
 		LogLevel:         c.logLevel,
 		IncludeTPSReport: c.includeTpsReport,
+		TotalAccounts:    c.totalAccounts,
 	}, nil
 }
 
@@ -122,8 +131,14 @@ func (c *rawConf) validateRawFlags() error {
 		return ErrEndBlockNotDefined
 	}
 
-	if c.mode == LongSender.String() && (c.toAddr == "" || c.privKey == "") {
-		return ErrPrivKeyToAddrNotDefined
+	if c.mode == LongSender.String() {
+		if c.toAddr == "" {
+			return ErrToAddrNotProvided
+		}
+
+		if c.privKey == "" && c.mnemonic == "" {
+			return ErrPrivKeyOrMnemonicNotProvided
+		}
 	}
 
 	return nil
