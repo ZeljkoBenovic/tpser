@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txsender"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txsigner"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
+	"github.com/ZeljkoBenovic/tpser/pkg/modes"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -26,7 +26,7 @@ type longsender struct {
 
 	signer    *txsigner.TxSigner
 	sender    *txsender.TxSender
-	getblocks *getblocks.GetBlocks
+	getblocks *modes.getBlocks
 
 	wg        sync.WaitGroup
 	nonce     *atomic.Uint64
@@ -46,7 +46,7 @@ func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf con
 		},
 		signer:    txsigner.New(ctx, log, eth, conf),
 		sender:    txsender.New(ctx, log, eth),
-		getblocks: getblocks.New(ctx, log, eth, conf),
+		getblocks: modes.newGetBlocksMode(ctx, log, eth, conf),
 	}
 }
 
@@ -141,7 +141,7 @@ func (l *longsender) sendTxFromMnemonics() error {
 								"nonce", currentNonce,
 							)
 
-							//l.noncesMap.Store(ind, currentNonce-1)
+							// l.noncesMap.Store(ind, currentNonce-1)
 
 							return
 						}
@@ -169,7 +169,7 @@ func (l *longsender) sendTxFromMnemonics() error {
 
 				l.log.Info("Transaction send timeout reached, generating report")
 
-				return l.getblocks.GetBlocksByNumbers(int64(firstBlock), int64(lastBlock))
+				return l.getblocks.getBlocksByNumbers(int64(firstBlock), int64(lastBlock))
 			} else {
 				l.log.Info("Transaction send timeout reached, stopping send", "timeout_min", l.conf.TxSendTimeoutMin)
 				return nil
@@ -280,7 +280,7 @@ func (l *longsender) sendTxWithPrivateKey() error {
 
 				l.log.Info("Transaction send timeout reached, generating report")
 
-				return l.getblocks.GetBlocksByNumbers(int64(firstBlock), int64(lastBlock))
+				return l.getblocks.getBlocksByNumbers(int64(firstBlock), int64(lastBlock))
 			} else {
 				l.log.Info("Transaction send timeout reached, stopping send", "timeout_min", l.conf.TxSendTimeoutMin)
 				return nil

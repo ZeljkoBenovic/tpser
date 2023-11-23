@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/longsender"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
+	"github.com/ZeljkoBenovic/tpser/pkg/modes"
+	"github.com/ZeljkoBenovic/tpser/pkg/modes/longsender"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -34,7 +34,7 @@ type factoryFunc func(context.Context, logger.Logger, *ethclient.Client, conf.Co
 // modesFactory is a map of functions, with conf.Mode as key, that returns a Common interface.
 var modesFactory = map[conf.Mode]factoryFunc{
 	conf.BlocksFetcher: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) Common {
-		return getblocks.New(ctx, log, eth, conf)
+		return modes.newGetBlocksMode(ctx, log, eth, conf)
 	},
 	conf.LongSender: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) Common {
 		return longsender.New(ctx, log, eth, conf)
