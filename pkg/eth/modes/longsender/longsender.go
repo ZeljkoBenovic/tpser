@@ -9,6 +9,7 @@ import (
 
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
+	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txreceipts"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txsender"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txsigner"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
@@ -27,6 +28,7 @@ type longsender struct {
 	signer    *txsigner.TxSigner
 	sender    *txsender.TxSender
 	getblocks *getblocks.GetBlocks
+	receipts  *txreceipts.TxReceipts
 
 	wg        sync.WaitGroup
 	nonce     *atomic.Uint64
@@ -47,6 +49,7 @@ func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf con
 		signer:    txsigner.New(ctx, log, eth, conf),
 		sender:    txsender.New(ctx, log, eth),
 		getblocks: getblocks.New(ctx, log, eth, conf),
+		receipts:  txreceipts.New(ctx, log, eth, conf),
 	}
 }
 
@@ -141,10 +144,10 @@ func (l *longsender) sendTxFromMnemonics() error {
 								"nonce", currentNonce,
 							)
 
-							//l.noncesMap.Store(ind, currentNonce-1)
-
 							return
 						}
+
+						l.receipts.StoreTxHash(hash)
 
 						l.log.Debug("Transaction sent",
 							"hash", hash.String(),
@@ -170,6 +173,10 @@ func (l *longsender) sendTxFromMnemonics() error {
 				l.log.Info("Transaction send timeout reached, generating report")
 
 				return l.getblocks.GetBlocksByNumbers(int64(firstBlock), int64(lastBlock))
+			} else if l.conf.WaitForConfirm {
+				l.log.Info("Waiting for transactions verification...")
+
+				l.receipts.ConfirmTransactions()
 			} else {
 				l.log.Info("Transaction send timeout reached, stopping send", "timeout_min", l.conf.TxSendTimeoutMin)
 				return nil
@@ -259,6 +266,8 @@ func (l *longsender) sendTxWithPrivateKey() error {
 						return
 					}
 
+					l.receipts.StoreTxHash(hash)
+
 					l.log.Debug("Transaction sent",
 						"hash", hash.String(),
 						"from", l.signer.GetFromAddress(),
@@ -281,6 +290,11 @@ func (l *longsender) sendTxWithPrivateKey() error {
 				l.log.Info("Transaction send timeout reached, generating report")
 
 				return l.getblocks.GetBlocksByNumbers(int64(firstBlock), int64(lastBlock))
+			} else if l.conf.WaitForConfirm {
+				l.log.Info("Waiting for transactions verification...")
+
+				l.receipts.ConfirmTransactions()
+				return nil
 			} else {
 				l.log.Info("Transaction send timeout reached, stopping send", "timeout_min", l.conf.TxSendTimeoutMin)
 				return nil

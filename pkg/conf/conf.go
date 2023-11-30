@@ -33,6 +33,9 @@ type Conf struct {
 	TxPerSec         int64
 	TxSendTimeoutMin int64
 	IncludeTPSReport bool
+
+	WaitForConfirm        bool
+	WaitForConfirmTimeout int64
 }
 
 type Blocks struct {
@@ -65,6 +68,9 @@ type rawConf struct {
 	txPerSec         int64
 	txSendTimeoutMin int64
 	includeTpsReport bool
+
+	waitForConfirm        bool
+	waitForConfirmTimeout int64
 }
 
 func New() (Conf, error) {
@@ -88,6 +94,8 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.Int64Var(&c.txPerSec, "tps", 100, "the number of transactions per second to send")
 	flag.Int64Var(&c.txSendTimeoutMin, "duration", 60, "the number of minutes after witch to stop the send")
 	flag.BoolVar(&c.includeTpsReport, "report", false, "set to true to include tps report after the long-sender node")
+	flag.BoolVar(&c.waitForConfirm, "confirm", false, "wait for transactions to be confirmed")
+	flag.Int64Var(&c.waitForConfirmTimeout, "confirm-timeout", 10, "wait for tx confirmation timeout in minutes")
 	flag.StringVar(&c.mnemonic, "mnemonic", "", "mnemonic string to derive accounts from")
 	flag.IntVar(&c.totalAccounts, "mnemonic-addr", 1, "total number of account to send transactions from")
 	flag.StringVar(
@@ -111,15 +119,17 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 			End:   c.blockEnd,
 			Range: c.blockRange,
 		},
-		Mode:             Mode(c.mode),
-		PrivateKey:       c.privKey,
-		Mnemonic:         c.mnemonic,
-		ToAddress:        c.toAddr,
-		TxPerSec:         c.txPerSec,
-		TxSendTimeoutMin: c.txSendTimeoutMin,
-		LogLevel:         c.logLevel,
-		IncludeTPSReport: c.includeTpsReport,
-		TotalAccounts:    c.totalAccounts,
+		Mode:                  Mode(c.mode),
+		PrivateKey:            c.privKey,
+		Mnemonic:              c.mnemonic,
+		ToAddress:             c.toAddr,
+		TxPerSec:              c.txPerSec,
+		TxSendTimeoutMin:      c.txSendTimeoutMin,
+		LogLevel:              c.logLevel,
+		IncludeTPSReport:      c.includeTpsReport,
+		TotalAccounts:         c.totalAccounts,
+		WaitForConfirm:        c.waitForConfirm,
+		WaitForConfirmTimeout: c.waitForConfirmTimeout,
 	}, nil
 }
 
