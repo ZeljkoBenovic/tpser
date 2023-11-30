@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strings"
 )
 
 type Mode string
@@ -16,6 +17,7 @@ func (m Mode) String() string {
 const (
 	BlocksFetcher Mode = "blocks-fetcher"
 	LongSender    Mode = "long-sender"
+	TxInfo        Mode = "tx-info"
 )
 
 type Conf struct {
@@ -36,6 +38,8 @@ type Conf struct {
 
 	WaitForConfirm        bool
 	WaitForConfirmTimeout int64
+
+	TxHashes []string
 }
 
 type Blocks struct {
@@ -49,6 +53,7 @@ var (
 	ErrEndBlockNotDefined           = errors.New("end block or block range not defined")
 	ErrToAddrNotProvided            = errors.New("to address not provided")
 	ErrPrivKeyOrMnemonicNotProvided = errors.New("private key or mnemonic not provided")
+	ErrTxHashNotProvided            = errors.New("transaction hash must be provided")
 )
 
 type rawConf struct {
@@ -71,10 +76,15 @@ type rawConf struct {
 
 	waitForConfirm        bool
 	waitForConfirmTimeout int64
+
+	txHash   string
+	txHashes []string
 }
 
 func New() (Conf, error) {
-	raw := &rawConf{}
+	raw := &rawConf{
+		txHashes: make([]string, 0),
+	}
 	conf, err := raw.getConfig(false)
 	if err != nil {
 		log.Fatalln("Could not initialize config: ", err.Error())
@@ -98,6 +108,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.Int64Var(&c.waitForConfirmTimeout, "confirm-timeout", 10, "wait for tx confirmation timeout in minutes")
 	flag.StringVar(&c.mnemonic, "mnemonic", "", "mnemonic string to derive accounts from")
 	flag.IntVar(&c.totalAccounts, "mnemonic-addr", 1, "total number of account to send transactions from")
+	flag.StringVar(&c.txHash, "tx-hashes", "", "comma delimited transaction hashes to get details for")
 	flag.StringVar(
 		&c.mode,
 		"mode",
@@ -111,6 +122,8 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 			return Conf{}, err
 		}
 	}
+
+	c.processFlags()
 
 	return Conf{
 		JsonRPC: c.jsonRpc,
@@ -130,6 +143,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 		TotalAccounts:         c.totalAccounts,
 		WaitForConfirm:        c.waitForConfirm,
 		WaitForConfirmTimeout: c.waitForConfirmTimeout,
+		TxHashes:              c.txHashes,
 	}, nil
 }
 
@@ -151,5 +165,15 @@ func (c *rawConf) validateRawFlags() error {
 		}
 	}
 
+	if c.mode == TxInfo.String() && c.txHash == "" {
+		return ErrTxHashNotProvided
+	}
+
 	return nil
+}
+
+func (c *rawConf) processFlags() {
+	rawHashes := strings.Split(strings.TrimSpace(c.txHash), ",")
+	txHashes := make([]string, 0)
+	c.txHashes = append(txHashes, rawHashes...)
 }

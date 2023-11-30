@@ -7,6 +7,7 @@ import (
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/longsender"
+	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/txinfo"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
 
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -19,7 +20,6 @@ type Eth interface {
 }
 
 // Common is the interface that all Eth modules must implement
-// Each individual module accepts its own type, which needs to be cast when calling
 type Common interface {
 	RunMode() error
 }
@@ -38,6 +38,9 @@ var modesFactory = map[conf.Mode]factoryFunc{
 	},
 	conf.LongSender: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) Common {
 		return longsender.New(ctx, log, eth, conf)
+	},
+	conf.TxInfo: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) Common {
+		return txinfo.New(ctx, log, eth, conf)
 	},
 }
 
