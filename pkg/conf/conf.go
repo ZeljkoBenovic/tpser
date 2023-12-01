@@ -39,7 +39,8 @@ type Conf struct {
 	WaitForConfirm        bool
 	WaitForConfirmTimeout int64
 
-	TxHashes []string
+	TxHashes    []string
+	TxCostInEth bool
 }
 
 type Blocks struct {
@@ -77,8 +78,9 @@ type rawConf struct {
 	waitForConfirm        bool
 	waitForConfirmTimeout int64
 
-	txHash   string
-	txHashes []string
+	txHash      string
+	txHashes    []string
+	txCostInEth bool
 }
 
 func New() (Conf, error) {
@@ -109,6 +111,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.StringVar(&c.mnemonic, "mnemonic", "", "mnemonic string to derive accounts from")
 	flag.IntVar(&c.totalAccounts, "mnemonic-addr", 1, "total number of account to send transactions from")
 	flag.StringVar(&c.txHash, "tx-hashes", "", "comma delimited transaction hashes to get details for")
+	flag.BoolVar(&c.txCostInEth, "tx-cost-eth", false, "present transaction costs in wei instead of eth")
 	flag.StringVar(
 		&c.mode,
 		"mode",
@@ -144,6 +147,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 		WaitForConfirm:        c.waitForConfirm,
 		WaitForConfirmTimeout: c.waitForConfirmTimeout,
 		TxHashes:              c.txHashes,
+		TxCostInEth:           c.txCostInEth,
 	}, nil
 }
 

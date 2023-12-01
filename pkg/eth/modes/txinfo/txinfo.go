@@ -74,30 +74,55 @@ func (t *TxInfo) displayOutput() {
 		totalsTable  = tablewriter.NewWriter(os.Stdout)
 	)
 
-	table.SetHeader([]string{"TX_HASH", "TO", "GAS_LIMIT(WEI)", "GAS_PRICE (WEI)", "COST (ETH)", "VALUE"})
+	switch t.conf.TxCostInEth {
+	case true:
+		table.SetHeader([]string{"TX_HASH", "TO", "GAS_LIMIT(WEI)", "GAS_PRICE (WEI)", "COST (ETH)", "VALUE"})
 
-	totalsTable.SetHeader([]string{"TOTAL_TXS", "TOTAL_COST (ETH)"})
-	totalsTable.SetAlignment(tablewriter.ALIGN_CENTER)
+		totalsTable.SetHeader([]string{"TOTAL_TXS", "TOTAL_COST (ETH)"})
+		totalsTable.SetAlignment(tablewriter.ALIGN_CENTER)
 
-	for _, tx := range t.txHashes {
-		cost := big.NewFloat(float64(tx.Cost().Int64()))
-		ethCost := new(big.Float).Quo(cost, wei)
+		for _, tx := range t.txHashes {
+			cost := big.NewFloat(float64(tx.Cost().Int64()))
+			ethCost := new(big.Float).Quo(cost, wei)
 
-		totalCostWei = totalCostWei.Add(totalCostWei, tx.Cost())
+			totalCostWei = totalCostWei.Add(totalCostWei, tx.Cost())
 
-		table.Append([]string{
-			tx.Hash().Hex(),
-			tx.To().Hex(),
-			fmt.Sprintf("%d", tx.Gas()),
-			tx.GasPrice().String(),
-			ethCost.Text('f', 18),
-			tx.Value().String(),
-		})
+			table.Append([]string{
+				tx.Hash().Hex(),
+				tx.To().Hex(),
+				fmt.Sprintf("%d", tx.Gas()),
+				tx.GasPrice().String(),
+				ethCost.Text('f', 18),
+				tx.Value().String(),
+			})
+		}
+
+		ethTotalCost := new(big.Float).Quo(big.NewFloat(float64(totalCostWei.Int64())), wei)
+
+		totalsTable.Append([]string{fmt.Sprintf("%d", len(t.txHashes)), ethTotalCost.Text('f', 18)})
+
+	default:
+		table.SetHeader([]string{"TX_HASH", "TO", "GAS_LIMIT", "GAS_PRICE", "COST", "VALUE"})
+
+		totalsTable.SetHeader([]string{"TOTAL_TXS", "TOTAL_COST"})
+		totalsTable.SetAlignment(tablewriter.ALIGN_CENTER)
+
+		for _, tx := range t.txHashes {
+			totalCostWei = totalCostWei.Add(totalCostWei, tx.Cost())
+
+			table.Append([]string{
+				tx.Hash().Hex(),
+				tx.To().Hex(),
+				fmt.Sprintf("%d", tx.Gas()),
+				tx.GasPrice().String(),
+				tx.Cost().String(),
+				tx.Value().String(),
+			})
+		}
+
+		totalsTable.Append([]string{fmt.Sprintf("%d", len(t.txHashes)), totalCostWei.String()})
+
 	}
-
-	ethTotalCost := new(big.Float).Quo(big.NewFloat(float64(totalCostWei.Int64())), wei)
-
-	totalsTable.Append([]string{fmt.Sprintf("%d", len(t.txHashes)), ethTotalCost.Text('f', 18)})
 
 	table.Render()
 	totalsTable.Render()
