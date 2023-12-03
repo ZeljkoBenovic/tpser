@@ -7,9 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// Type is the mode type
-const Type string = "GET_BLOCKS"
-
 // Config is the configuration for the get blocks mode
 type Config struct {
 	Start uint64 // Start block number

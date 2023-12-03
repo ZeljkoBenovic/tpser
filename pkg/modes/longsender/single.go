@@ -15,8 +15,6 @@ type SingleMode struct {
 	config SingleConfig
 }
 
-// TODO retain ability to print TPS reports with the long sender
-
 func NewSingle(
 	log logger.Logger,
 	client client,
