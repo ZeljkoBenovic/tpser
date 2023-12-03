@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 
-	"github.com/ZeljkoBenovic/tpser/pkg/modes"
+	"github.com/ZeljkoBenovic/tpser/pkg/modes/fetcher"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/peterbourgon/ff/v3/ffcli"
 )
 
@@ -16,7 +18,7 @@ type blocksFetcherCfg struct {
 	blockTail  uint64
 }
 
-func newBlocksFetcherCmd(rootCfg *rootCfg) *ffcli.Command {
+func newFetcherCmd(rootCfg *rootCfg) *ffcli.Command {
 	cfg := &blocksFetcherCfg{
 		rootCfg: rootCfg,
 	}
@@ -60,14 +62,20 @@ func (c *blocksFetcherCfg) registerFlags(fs *flag.FlagSet) {
 }
 
 func (c *blocksFetcherCfg) exec(ctx context.Context) error {
-	cfg := modes.GetBlocksConfig{
+	cfg := fetcher.Config{
 		Start: c.blockStart,
 		End:   c.blockEnd,
 		Tail:  c.blockTail,
 	}
 
-	// TODO init client
-	mode := modes.NewGetBlocksMode(nil, cfg)
+	// Init the client
+	client, err := ethclient.Dial(c.rootCfg.JSONRPC)
+	if err != nil {
+		return fmt.Errorf("unable to dial JSON-RPC, %w", err)
+	}
 
+	mode := fetcher.New(client, cfg)
+
+	// Run the mode
 	return mode.Run(ctx)
 }

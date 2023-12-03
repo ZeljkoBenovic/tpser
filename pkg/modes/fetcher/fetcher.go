@@ -1,4 +1,4 @@
-package modes
+package fetcher
 
 import (
 	"context"
@@ -7,37 +7,37 @@ import (
 	"os"
 	"time"
 
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/types"
 	"github.com/briandowns/spinner"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/sync/errgroup"
 )
 
-type getBlocks struct {
-	eth  *ethclient.Client
-	conf GetBlocksConfig
+// Mode is the blocks fetcher mode
+type Mode struct {
+	client client
+	conf   Config
 }
 
-// newGetBlocksMode creates a new get blocks mode
-func newGetBlocksMode(
-	eth *ethclient.Client,
-	conf GetBlocksConfig,
-) *getBlocks {
-	return &getBlocks{
-		eth:  eth,
-		conf: conf,
+// New creates a new blocks fetcher mode instance
+func New(
+	client client,
+	conf Config,
+) *Mode {
+	return &Mode{
+		client: client,
+		conf:   conf,
 	}
 }
 
-func (g *getBlocks) Run(ctx context.Context) error {
+// Run runs the blocks fetcher mode
+func (g *Mode) Run(ctx context.Context) error {
 	var (
 		startBlock = g.conf.Start
 		endBlock   = g.conf.End
 	)
 
 	if g.conf.Tail != 0 {
-		latestBlock, err := g.eth.BlockNumber(ctx)
+		latestBlock, err := g.client.BlockNumber(ctx)
 		if err != nil {
 			return fmt.Errorf("could not get latest block: %w", err)
 		}
@@ -50,7 +50,7 @@ func (g *getBlocks) Run(ctx context.Context) error {
 }
 
 // printBlockRange outputs the block info for the specified range
-func (g *getBlocks) printBlockRange(
+func (g *Mode) printBlockRange(
 	ctx context.Context,
 	startBlock,
 	endBlock uint64,
@@ -62,7 +62,7 @@ func (g *getBlocks) printBlockRange(
 
 	group, groupCtx := errgroup.WithContext(ctx)
 
-	blocks := make([]*types.BlockInfo, endBlock-startBlock)
+	blocks := make([]*blockInfo, endBlock-startBlock)
 	for block := startBlock; block <= endBlock; block++ {
 		block := block
 
@@ -90,14 +90,24 @@ func (g *getBlocks) printBlockRange(
 	return nil
 }
 
+// blockInfo contains relevant block information
+type blockInfo struct {
+	TransactionNum int
+	GasLimit       uint64
+	GasUsed        uint64
+	Hash           string
+	Number         uint64
+	Time           uint64
+}
+
 // getBlockInfo fetches the block info from the chain
-func (g *getBlocks) getBlockInfo(ctx context.Context, blockNumber uint64) (*types.BlockInfo, error) {
-	block, err := g.eth.BlockByNumber(ctx, big.NewInt(0).SetUint64(blockNumber))
+func (g *Mode) getBlockInfo(ctx context.Context, blockNumber uint64) (*blockInfo, error) {
+	block, err := g.client.BlockByNumber(ctx, big.NewInt(0).SetUint64(blockNumber))
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch block %d, %w", blockNumber, err)
 	}
 
-	return &types.BlockInfo{
+	return &blockInfo{
 		TransactionNum: block.Transactions().Len(),
 		GasLimit:       block.GasLimit(),
 		GasUsed:        block.GasUsed(),
@@ -108,7 +118,7 @@ func (g *getBlocks) getBlockInfo(ctx context.Context, blockNumber uint64) (*type
 }
 
 // outputStats outputs the formatted block stats
-func outputStats(blocks []*types.BlockInfo) {
+func outputStats(blocks []*blockInfo) {
 	totalTxs := uint64(0)
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader(
@@ -140,7 +150,7 @@ func outputStats(blocks []*types.BlockInfo) {
 }
 
 // printTPS prints the TPS information for the block range
-func printTPS(totalTxs uint64, blocks []*types.BlockInfo, table *tablewriter.Table) {
+func printTPS(totalTxs uint64, blocks []*blockInfo, table *tablewriter.Table) {
 	timeStart := time.Unix(int64(blocks[0].Time), 0)
 	timeFinish := time.Unix(int64(blocks[len(blocks)-1].Time), 0)
 	totalTimeToComplete := timeFinish.Sub(timeStart)
