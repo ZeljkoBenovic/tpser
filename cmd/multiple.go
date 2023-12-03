@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ZeljkoBenovic/tpser/cmd/logger"
 	"github.com/ZeljkoBenovic/tpser/pkg/modes/longsender"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -73,8 +74,7 @@ func (c *multipleCfg) exec(ctx context.Context) error {
 		return fmt.Errorf("unable to dial JSON-RPC, %w", err)
 	}
 
-	// TODO add logger
-	mode := longsender.NewMultiple(nil, client, cfg)
+	mode := longsender.NewMultiple(logger.NewZapLogger(), client, cfg)
 
 	// Run the mode
 	return mode.Run(ctx)

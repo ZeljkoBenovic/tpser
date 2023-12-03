@@ -1,6 +1,9 @@
 package logger
 
-import "go.uber.org/zap"
+import (
+	"github.com/ZeljkoBenovic/tpser/pkg/logger"
+	"go.uber.org/zap"
+)
 
 type zapLogger struct {
 	log *zap.SugaredLogger
@@ -22,16 +25,7 @@ func (l *zapLogger) Debug(msg string, args ...interface{}) {
 	l.log.Debugw(msg, args...)
 }
 
-func (l *zapLogger) Fatalln(msg string, args ...interface{}) {
-	l.log.Fatalw(msg, args...)
-}
-
-func (l *zapLogger) Named(name string) Logger {
-	l.log = l.log.Named(name)
-	return l
-}
-
-func NewZapLogger() Logger {
+func NewZapLogger() logger.Logger {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
