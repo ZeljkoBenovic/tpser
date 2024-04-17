@@ -3,7 +3,6 @@ package eth
 import (
 	"context"
 	"errors"
-
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/longsender"
@@ -59,7 +58,6 @@ func New(conf conf.Conf, log logger.Logger, ctx context.Context) (Eth, error) {
 		log.Error("Could not dial json-rpc", "json-rpc", conf.JsonRPC)
 		return nil, err
 	}
-
 	return &eth{
 		ethClient:    e,
 		log:          log,

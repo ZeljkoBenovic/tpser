@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"os"
+	"os/signal"
 
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth"
@@ -11,9 +12,18 @@ import (
 )
 
 func Run() {
+	newCtx, cancel := context.WithCancel(context.Background())
+
+	go func(cancel context.CancelFunc) {
+		sig := make(chan os.Signal)
+		signal.Notify(sig, os.Interrupt, os.Kill)
+		<-sig
+		cancel()
+	}(cancel)
+
 	fx.New(
 		fx.Provide(
-			context.Background,
+			func() context.Context { return newCtx },
 			logger.NewLogrusLogger,
 			conf.New,
 			eth.New,

@@ -20,10 +20,11 @@ import (
 var ErrPrivKeyOrMnemonicNotProvided = errors.New("longsender requires mnemonic or private key")
 
 type longsender struct {
-	ctx  context.Context
-	log  logger.Logger
-	eth  *ethclient.Client
-	conf conf.Conf
+	ctx    context.Context
+	cancel context.CancelFunc
+	log    logger.Logger
+	eth    *ethclient.Client
+	conf   conf.Conf
 
 	signer    *txsigner.TxSigner
 	sender    *txsender.TxSender
@@ -36,13 +37,21 @@ type longsender struct {
 }
 
 func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) *longsender {
+	newCtx, cancel := context.WithCancel(ctx)
+
+	// enable indefinite runs
+	if conf.TxSendTimeoutMin > 0 {
+		newCtx, cancel = context.WithTimeout(ctx, time.Duration(conf.TxSendTimeoutMin)*time.Minute)
+	}
+
 	return &longsender{
-		wg:    sync.WaitGroup{},
-		ctx:   ctx,
-		log:   log,
-		eth:   eth,
-		conf:  conf,
-		nonce: &atomic.Uint64{},
+		wg:     sync.WaitGroup{},
+		ctx:    newCtx,
+		cancel: cancel,
+		log:    log,
+		eth:    eth,
+		conf:   conf,
+		nonce:  &atomic.Uint64{},
 		noncesMap: safeNonce{
 			nonces: map[int]*atomic.Uint64{},
 		},
@@ -96,9 +105,8 @@ func (l *longsender) sendTxFromMnemonics() error {
 		lastBlock  uint64
 		err        error
 		// split number of transactions evenly
-		txNum   = make([]struct{}, l.conf.TxPerSec/int64(l.conf.TotalAccounts))
-		tick    = time.Tick(time.Second)
-		timeout = time.After(time.Minute * time.Duration(l.conf.TxSendTimeoutMin))
+		txNum = make([]struct{}, l.conf.TxPerSec/int64(l.conf.TotalAccounts))
+		tick  = time.Tick(time.Second)
 	)
 
 	if l.conf.IncludeTPSReport {
@@ -163,7 +171,7 @@ func (l *longsender) sendTxFromMnemonics() error {
 
 			l.wg.Wait()
 			l.log.Debug("Transaction batch sent")
-		case <-timeout:
+		case <-l.ctx.Done():
 			if l.conf.IncludeTPSReport {
 				lastBlock, err = l.eth.BlockNumber(l.ctx)
 				if err != nil {
@@ -233,7 +241,6 @@ func (l *longsender) sendTxWithPrivateKey() error {
 	l.nonce.Store(l.signer.GetNonce())
 
 	tick := time.Tick(time.Second)
-	timeout := time.After(time.Minute * time.Duration(l.conf.TxSendTimeoutMin))
 
 	if l.conf.IncludeTPSReport {
 		firstBlock, err = l.eth.BlockNumber(l.ctx)
@@ -280,7 +287,7 @@ func (l *longsender) sendTxWithPrivateKey() error {
 
 			l.wg.Wait()
 			l.log.Debug("Transaction batch sent")
-		case <-timeout:
+		case <-l.ctx.Done():
 			if l.conf.IncludeTPSReport {
 				lastBlock, err = l.eth.BlockNumber(l.ctx)
 				if err != nil {
@@ -299,7 +306,6 @@ func (l *longsender) sendTxWithPrivateKey() error {
 				l.log.Info("Transaction send timeout reached, stopping send", "timeout_min", l.conf.TxSendTimeoutMin)
 				return nil
 			}
-
 		}
 	}
 }
