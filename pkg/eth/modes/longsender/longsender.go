@@ -106,7 +106,7 @@ func (l *longsender) sendTxFromMnemonics() error {
 		err        error
 		// split number of transactions evenly
 		txNum = make([]struct{}, l.conf.TxPerSec/int64(l.conf.TotalAccounts))
-		tick  = time.Tick(time.Second)
+		tick  = time.Tick(time.Second * time.Duration(l.conf.TxSendInterval))
 	)
 
 	if l.conf.IncludeTPSReport {
@@ -240,7 +240,7 @@ func (l *longsender) sendTxWithPrivateKey() error {
 	txNum := make([]struct{}, l.conf.TxPerSec)
 	l.nonce.Store(l.signer.GetNonce())
 
-	tick := time.Tick(time.Second)
+	tick := time.Tick(time.Second * time.Duration(l.conf.TxSendInterval))
 
 	if l.conf.IncludeTPSReport {
 		firstBlock, err = l.eth.BlockNumber(l.ctx)

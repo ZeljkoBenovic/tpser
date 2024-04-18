@@ -33,6 +33,7 @@ type Conf struct {
 	ToAddress     string
 
 	TxPerSec         int64
+	TxSendInterval   int64
 	TxSendTimeoutMin int64
 	IncludeTPSReport bool
 
@@ -73,6 +74,7 @@ type rawConf struct {
 
 	txPerSec         int64
 	txSendTimeoutMin int64
+	txSendInterval   int64
 	includeTpsReport bool
 
 	waitForConfirm        bool
@@ -104,6 +106,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.StringVar(&c.privKey, "pk", "", "the private key for the sender account")
 	flag.StringVar(&c.toAddr, "to", "", "address to which the funds will be sent")
 	flag.Int64Var(&c.txPerSec, "tps", 100, "the number of transactions per second to send")
+	flag.Int64Var(&c.txSendInterval, "tx-sec", 1, "the number of seconds to wait between sending transactions")
 	flag.Int64Var(&c.txSendTimeoutMin, "duration", 60, "the number of minutes after witch to stop the send")
 	flag.BoolVar(&c.includeTpsReport, "report", false, "set to true to include tps report after the long-sender node")
 	flag.BoolVar(&c.waitForConfirm, "confirm", false, "wait for transactions to be confirmed")
@@ -140,6 +143,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 		Mnemonic:              c.mnemonic,
 		ToAddress:             c.toAddr,
 		TxPerSec:              c.txPerSec,
+		TxSendInterval:        c.txSendInterval,
 		TxSendTimeoutMin:      c.txSendTimeoutMin,
 		LogLevel:              c.logLevel,
 		IncludeTPSReport:      c.includeTpsReport,
