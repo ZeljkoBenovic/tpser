@@ -2,14 +2,13 @@ package app
 
 import (
 	"context"
-	"net/http"
+	"github.com/ZeljkoBenovic/tpser/pkg/prom"
 	"os"
 	"os/signal"
 
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/fx"
 )
 
@@ -28,6 +27,7 @@ func Run() {
 			func() context.Context { return newCtx },
 			logger.NewLogrusLogger,
 			conf.New,
+			prom.NewPrometheus,
 			eth.New,
 		),
 		fx.Invoke(mainApp),
@@ -35,11 +35,10 @@ func Run() {
 	).Run()
 }
 
-func mainApp(eth eth.Eth, log logger.Logger) {
+func mainApp(eth eth.Eth, prom *prom.Prom, log logger.Logger) {
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		if err := http.ListenAndServe(":3000", nil); err != nil {
-			log.Fatalln("Could not set prometheus http", "err", err.Error())
+		if err := prom.ServeHTTP(); err != nil {
+			log.Fatalln("Could not run metrics server", "err", err.Error())
 		}
 	}()
 

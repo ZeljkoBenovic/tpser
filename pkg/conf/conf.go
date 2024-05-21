@@ -42,6 +42,10 @@ type Conf struct {
 
 	TxHashes    []string
 	TxCostInEth bool
+
+	StartingNonce *int64
+
+	MetricsPort string
 }
 
 type Blocks struct {
@@ -83,6 +87,8 @@ type rawConf struct {
 	txHash      string
 	txHashes    []string
 	txCostInEth bool
+
+	metricsPort string
 }
 
 func New() (Conf, error) {
@@ -115,6 +121,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.IntVar(&c.totalAccounts, "mnemonic-addr", 1, "total number of account to send transactions from")
 	flag.StringVar(&c.txHash, "tx-hashes", "", "comma delimited transaction hashes to get details for")
 	flag.BoolVar(&c.txCostInEth, "tx-cost-eth", false, "present transaction costs in wei instead of eth")
+	flag.StringVar(&c.metricsPort, "metrics-port", "3000", "port where the prometheus metrics will be exposed")
 	flag.StringVar(
 		&c.mode,
 		"mode",
@@ -152,6 +159,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 		WaitForConfirmTimeout: c.waitForConfirmTimeout,
 		TxHashes:              c.txHashes,
 		TxCostInEth:           c.txCostInEth,
+		MetricsPort:           c.metricsPort,
 	}, nil
 }
 

@@ -141,7 +141,9 @@ func (t *TxSigner) SetToAddress(toAddressString string) error {
 func (t *TxSigner) GetNonce() uint64 {
 	return t.nonce
 }
-
+func (t *TxSigner) GetFreshNonce() (uint64, error) {
+	return t.eth.PendingNonceAt(t.ctx, t.from)
+}
 func (t *TxSigner) GetNextSignedTx(nextNonce uint64) (*types.Transaction, error) {
 	newTx := types.NewTx(&types.LegacyTx{
 		Nonce:    nextNonce,

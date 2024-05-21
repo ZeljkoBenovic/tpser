@@ -3,6 +3,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"github.com/ZeljkoBenovic/tpser/pkg/prom"
 
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
@@ -28,17 +29,17 @@ var (
 )
 
 // factoryFunc is the function which must return Common interface
-type factoryFunc func(context.Context, logger.Logger, *ethclient.Client, conf.Conf) Common
+type factoryFunc func(context.Context, logger.Logger, *ethclient.Client, conf.Conf, *prom.Prom) Common
 
 // modesFactory is a map of functions, with conf.Mode as key, that returns a Common interface.
 var modesFactory = map[conf.Mode]factoryFunc{
-	conf.BlocksFetcher: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) Common {
+	conf.BlocksFetcher: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf, _ *prom.Prom) Common {
 		return getblocks.New(ctx, log, eth, conf)
 	},
-	conf.LongSender: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) Common {
-		return longsender.New(ctx, log, eth, conf)
+	conf.LongSender: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf, prom *prom.Prom) Common {
+		return longsender.New(ctx, log, eth, conf, prom)
 	},
-	conf.TxInfo: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) Common {
+	conf.TxInfo: func(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf, _ *prom.Prom) Common {
 		return txinfo.New(ctx, log, eth, conf)
 	},
 }
@@ -49,10 +50,11 @@ type eth struct {
 	conf         conf.Conf
 	log          logger.Logger
 	ethClient    *ethclient.Client
+	prom         *prom.Prom
 	modesFactory map[conf.Mode]factoryFunc
 }
 
-func New(conf conf.Conf, log logger.Logger, ctx context.Context) (Eth, error) {
+func New(conf conf.Conf, log logger.Logger, ctx context.Context, prom *prom.Prom) (Eth, error) {
 	e, err := ethclient.Dial(conf.JsonRPC)
 	if err != nil {
 		log.Error("Could not dial json-rpc", "json-rpc", conf.JsonRPC)
@@ -63,6 +65,7 @@ func New(conf conf.Conf, log logger.Logger, ctx context.Context) (Eth, error) {
 		log:          log,
 		ctx:          ctx,
 		conf:         conf,
+		prom:         prom,
 		modesFactory: modesFactory,
 	}, nil
 }
@@ -73,6 +76,6 @@ func (e *eth) Run() error {
 		return ErrModeNotSupported
 	}
 
-	mode := modeConstructor(e.ctx, e.log, e.ethClient, e.conf)
+	mode := modeConstructor(e.ctx, e.log, e.ethClient, e.conf, e.prom)
 	return mode.RunMode()
 }
