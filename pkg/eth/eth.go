@@ -3,12 +3,12 @@ package eth
 import (
 	"context"
 	"errors"
+
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/longsender"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/txinfo"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
-
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 

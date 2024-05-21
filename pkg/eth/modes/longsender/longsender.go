@@ -15,6 +15,8 @@ import (
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var ErrPrivKeyOrMnemonicNotProvided = errors.New("longsender requires mnemonic or private key")
@@ -34,6 +36,8 @@ type longsender struct {
 	wg        sync.WaitGroup
 	nonce     *atomic.Uint64
 	noncesMap safeNonce
+
+	txRequestDuration txRequestDuration
 }
 
 func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) *longsender {
@@ -59,12 +63,32 @@ func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf con
 		sender:    txsender.New(ctx, log, eth),
 		getblocks: getblocks.New(ctx, log, eth, conf),
 		receipts:  txreceipts.New(ctx, log, eth, conf),
+
+		txRequestDuration: txRequestDuration{
+			mut: sync.Mutex{},
+			duration: promauto.NewHistogram(prometheus.HistogramOpts{
+				Namespace: "tpser",
+				Name:      "tpser_tx_duration",
+				Help:      "Transaction sending request duration",
+			}),
+		},
 	}
 }
 
 type safeNonce struct {
 	sync.RWMutex
 	nonces map[int]*atomic.Uint64
+}
+
+type txRequestDuration struct {
+	mut      sync.Mutex
+	duration prometheus.Histogram
+}
+
+func (t *txRequestDuration) Observe(observable float64) {
+	t.mut.Lock()
+	t.duration.Observe(observable)
+	t.mut.Unlock()
 }
 
 func (s *safeNonce) Load(index int) uint64 {
@@ -143,6 +167,8 @@ func (l *longsender) sendTxFromMnemonics() error {
 
 						currentNonce := l.noncesMap.Load(ind)
 
+						sendStart := time.Now()
+
 						hash, txErr := l.sender.SendSignedTransaction(tx)
 						if txErr != nil {
 							l.log.Error("Transaction send error",
@@ -154,6 +180,10 @@ func (l *longsender) sendTxFromMnemonics() error {
 
 							return
 						}
+
+						sendEnd := time.Since(sendStart)
+
+						l.txRequestDuration.Observe(float64(sendEnd.Milliseconds()))
 
 						l.receipts.StoreTxHash(hash)
 
@@ -262,6 +292,9 @@ func (l *longsender) sendTxWithPrivateKey() error {
 
 				go func(tx *types.Transaction) {
 					defer l.wg.Done()
+
+					sendStart := time.Now()
+
 					hash, txErr := l.sender.SendSignedTransaction(tx)
 					if txErr != nil {
 						l.log.Error("Transaction send error",
@@ -272,6 +305,10 @@ func (l *longsender) sendTxWithPrivateKey() error {
 						)
 						return
 					}
+
+					sendEnd := time.Since(sendStart)
+
+					l.txRequestDuration.Observe(float64(sendEnd.Milliseconds()))
 
 					l.receipts.StoreTxHash(hash)
 
