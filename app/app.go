@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"github.com/ZeljkoBenovic/tpser/pkg/prom"
 	"os"
 	"os/signal"
 
@@ -26,6 +27,7 @@ func Run() {
 			func() context.Context { return newCtx },
 			logger.NewLogrusLogger,
 			conf.New,
+			prom.NewPrometheus,
 			eth.New,
 		),
 		fx.Invoke(mainApp),
@@ -33,7 +35,13 @@ func Run() {
 	).Run()
 }
 
-func mainApp(eth eth.Eth, log logger.Logger) {
+func mainApp(eth eth.Eth, prom *prom.Prom, log logger.Logger) {
+	go func() {
+		if err := prom.ServeHTTP(); err != nil {
+			log.Fatalln("Could not run metrics server", "err", err.Error())
+		}
+	}()
+
 	if err := eth.Run(); err != nil {
 		log.Fatalln("Could not run application", "err", err.Error())
 	}

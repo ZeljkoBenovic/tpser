@@ -3,6 +3,8 @@ package longsender
 import (
 	"context"
 	"errors"
+	"github.com/ZeljkoBenovic/tpser/pkg/prom"
+	"golang.org/x/sync/errgroup"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,7 +15,6 @@ import (
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txsender"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txsigner"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -34,9 +35,11 @@ type longsender struct {
 	wg        sync.WaitGroup
 	nonce     *atomic.Uint64
 	noncesMap safeNonce
+
+	prom *prom.Prom
 }
 
-func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf) *longsender {
+func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf conf.Conf, prom *prom.Prom) *longsender {
 	newCtx, cancel := context.WithCancel(ctx)
 
 	// enable indefinite runs
@@ -59,6 +62,7 @@ func New(ctx context.Context, log logger.Logger, eth *ethclient.Client, conf con
 		sender:    txsender.New(ctx, log, eth),
 		getblocks: getblocks.New(ctx, log, eth, conf),
 		receipts:  txreceipts.New(ctx, log, eth, conf),
+		prom:      prom,
 	}
 }
 
@@ -89,6 +93,9 @@ func (s *safeNonce) Store(index int, value uint64) {
 }
 
 func (l *longsender) RunMode() error {
+	l.prom.SetTxSendInterval(float64(l.conf.TxSendInterval))
+	l.prom.SetTxNumberPerInterval(float64(l.conf.TxPerSec))
+
 	if l.conf.Mnemonic != "" {
 		return l.sendTxFromMnemonics()
 	} else if l.conf.PrivateKey != "" {
@@ -101,9 +108,10 @@ func (l *longsender) RunMode() error {
 func (l *longsender) sendTxFromMnemonics() error {
 	l.log.Info("Sending transactions using mnemonics", "tps", l.conf.TxPerSec, "duration_min", l.conf.TxSendTimeoutMin)
 	var (
-		firstBlock uint64
-		lastBlock  uint64
-		err        error
+		firstBlock        uint64
+		lastBlock         uint64
+		err               error
+		fetchPendingNonce bool
 		// split number of transactions evenly
 		txNum = make([]struct{}, l.conf.TxPerSec/int64(l.conf.TotalAccounts))
 		tick  = time.Tick(time.Second * time.Duration(l.conf.TxSendInterval))
@@ -126,22 +134,33 @@ func (l *longsender) sendTxFromMnemonics() error {
 		case <-tick:
 			// each signer should send its own batch
 			for ind, signer := range signers {
+				if fetchPendingNonce {
+					newNonce, err := signer.GetFreshNonce()
+					if err != nil {
+						l.log.Error("Could not fetch new nonce", "err", err.Error())
+						l.prom.IncreaseTxErrorCount()
+						continue
+					}
+
+					l.noncesMap.Store(ind, newNonce)
+					fetchPendingNonce = false
+					l.log.Debug("New nonce fetched", "nonce", l.noncesMap.Load(ind))
+				}
+
 				for range txNum {
-					l.wg.Add(1)
 					ind := ind
+					signer := signer
 
 					tx, err := signer.GetNextSignedTx(l.noncesMap.Load(ind))
 					if err != nil {
 						return err
 					}
 
-					go func(
-						tx *types.Transaction,
-						signer *txsigner.TxSigner,
-					) {
-						defer l.wg.Done()
+					errGr, _ := errgroup.WithContext(l.ctx)
 
+					errGr.Go(func() error {
 						currentNonce := l.noncesMap.Load(ind)
+						sendStart := time.Now()
 
 						hash, txErr := l.sender.SendSignedTransaction(tx)
 						if txErr != nil {
@@ -151,26 +170,31 @@ func (l *longsender) sendTxFromMnemonics() error {
 								"from", signer.GetFromAddress(),
 								"nonce", currentNonce,
 							)
-
-							return
+							return txErr
 						}
+
+						l.prom.ObserveTxRequestDuration(float64(time.Since(sendStart).Milliseconds()))
 
 						l.receipts.StoreTxHash(hash)
 
-						l.log.Debug("Transaction sent",
+						l.log.Info("Transaction sent",
 							"hash", hash.String(),
 							"from", signer.GetFromAddress(),
 							"nonce", currentNonce,
 						)
 
-					}(tx, signer)
+						return nil
+					})
+
+					if txErr := errGr.Wait(); txErr != nil {
+						fetchPendingNonce = true
+						l.prom.IncreaseTxErrorCount()
+						continue
+					}
 
 					l.noncesMap.Increment(ind)
 				}
 			}
-
-			l.wg.Wait()
-			l.log.Debug("Transaction batch sent")
 		case <-l.ctx.Done():
 			if l.conf.IncludeTPSReport {
 				lastBlock, err = l.eth.BlockNumber(l.ctx)
@@ -227,9 +251,10 @@ func (l *longsender) initMnemonicAccounts() ([]*txsigner.TxSigner, error) {
 
 func (l *longsender) sendTxWithPrivateKey() error {
 	var (
-		firstBlock uint64
-		lastBlock  uint64
-		err        error
+		firstBlock        uint64
+		lastBlock         uint64
+		err               error
+		fetchPendingNonce bool
 	)
 	l.log.Info("Sending transactions using private key", "tps", l.conf.TxPerSec, "duration_min", l.conf.TxSendTimeoutMin)
 
@@ -239,7 +264,6 @@ func (l *longsender) sendTxWithPrivateKey() error {
 
 	txNum := make([]struct{}, l.conf.TxPerSec)
 	l.nonce.Store(l.signer.GetNonce())
-
 	tick := time.Tick(time.Second * time.Duration(l.conf.TxSendInterval))
 
 	if l.conf.IncludeTPSReport {
@@ -252,41 +276,61 @@ func (l *longsender) sendTxWithPrivateKey() error {
 	for {
 		select {
 		case <-tick:
-			for range txNum {
-				l.wg.Add(1)
+			if fetchPendingNonce {
+				newNonce, err := l.signer.GetFreshNonce()
+				if err != nil {
+					l.log.Error("Could not fetch new nonce", "err", err.Error())
+					l.prom.IncreaseTxErrorCount()
+					continue
+				}
 
+				l.nonce.Store(newNonce)
+				fetchPendingNonce = false
+				l.log.Debug("New nonce fetched", "nonce", l.nonce.Load())
+			}
+
+			for range txNum {
 				tx, err := l.signer.GetNextSignedTx(l.nonce.Load())
 				if err != nil {
 					return err
 				}
 
-				go func(tx *types.Transaction) {
-					defer l.wg.Done()
+				errGr, _ := errgroup.WithContext(l.ctx)
+
+				errGr.Go(func() error {
+					sendStart := time.Now()
+
 					hash, txErr := l.sender.SendSignedTransaction(tx)
 					if txErr != nil {
-						l.log.Error("Transaction send error",
-							"err", txErr,
-							"from", l.signer.GetFromAddress(),
-							"nonce", l.nonce.Load(),
-							"hash", tx.Hash(),
-						)
-						return
+						return txErr
 					}
 
+					l.prom.ObserveTxRequestDuration(float64(time.Since(sendStart).Milliseconds()))
 					l.receipts.StoreTxHash(hash)
 
-					l.log.Debug("Transaction sent",
+					l.log.Info("Transaction sent",
 						"hash", hash.String(),
 						"from", l.signer.GetFromAddress(),
 						"nonce", l.nonce.Load(),
 					)
-				}(tx)
+
+					return nil
+				})
+
+				if txErr := errGr.Wait(); txErr != nil {
+					l.log.Error("Transaction send error",
+						"err", txErr,
+						"from", l.signer.GetFromAddress(),
+						"nonce", l.nonce.Load(),
+						"hash", tx.Hash(),
+					)
+					fetchPendingNonce = true
+					l.prom.IncreaseTxErrorCount()
+					continue
+				}
 
 				l.nonce.Add(1)
 			}
-
-			l.wg.Wait()
-			l.log.Debug("Transaction batch sent")
 		case <-l.ctx.Done():
 			if l.conf.IncludeTPSReport {
 				lastBlock, err = l.eth.BlockNumber(l.ctx)
