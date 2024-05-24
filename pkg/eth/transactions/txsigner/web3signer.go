@@ -11,6 +11,7 @@ import (
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type web3signer struct {
@@ -27,9 +28,22 @@ func newWeb3Signer(conf conf.Conf, log logger.Logger) *web3signer {
 }
 
 func (w web3signer) SignTx(tx *types.Transaction, chainID *big.Int, pubKey string) (*types.Transaction, error) {
-	rawTx, err := tx.MarshalBinary()
+	var (
+		signer       = types.NewEIP155Signer(chainID)
+		dataToEncode = []interface{}{
+			tx.Nonce(),
+			tx.GasPrice(),
+			tx.Gas(),
+			tx.To(),
+			tx.Value(),
+			tx.Data(),
+			chainID, uint(0), uint(0),
+		}
+	)
+
+	rawTx, err := rlp.EncodeToBytes(dataToEncode)
 	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal unsigned tx: %w", err)
+		return nil, fmt.Errorf("could not rlp encode tx to bytes: %w", err)
 	}
 
 	resp, err := http.Post(
@@ -53,13 +67,21 @@ func (w web3signer) SignTx(tx *types.Transaction, chainID *big.Int, pubKey strin
 
 	sig, err := hexutil.Decode(string(rawSig))
 	if err != nil {
+		return nil, fmt.Errorf("could not decode raw web3signer signature: %w", err)
+	}
+
+	// fix legacy V
+	if sig[64] == 28 || sig[64] == 27 {
+		sig[64] -= 27
+	}
+
+	signedTx, err := tx.WithSignature(signer, sig)
+	sender, err := signer.Sender(signedTx)
+	if err != nil {
 		return nil, err
 	}
 
-	// V must be 0 or 1
-	if sig[64] > 1 {
-		sig[64] = 1
-	}
+	w.log.Debug("Transaction sent", "sender", sender, "hash", signedTx.Hash().String())
 
-	return tx.WithSignature(types.NewEIP155Signer(chainID), sig)
+	return signedTx, nil
 }

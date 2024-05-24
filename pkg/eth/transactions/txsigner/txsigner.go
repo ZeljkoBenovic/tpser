@@ -25,6 +25,7 @@ type txSignerEthClient interface {
 	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
 	SuggestGasPrice(ctx context.Context) (*big.Int, error)
 	ChainID(ctx context.Context) (*big.Int, error)
+	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 }
 
 var (
@@ -180,11 +181,17 @@ func (t *TxSigner) SetToAddress(toAddressString string) error {
 		t.to = common.HexToAddress(toAddressString)
 	}
 
+	bal, err := t.eth.BalanceAt(t.ctx, t.from, nil)
+	if err != nil {
+		return fmt.Errorf("could not fetch balance for senders account: %w", err)
+	}
+
 	t.log.Debug("Transaction details set",
 		"nonce", nonce,
 		"from", t.from.String(),
 		"to", t.to.String(),
 		"gas_price", gas.String(),
+		"senders_balance", bal.String(),
 	)
 
 	return nil
