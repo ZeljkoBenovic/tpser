@@ -46,6 +46,9 @@ type Conf struct {
 	StartingNonce *int64
 
 	MetricsPort string
+
+	Web3SignerURL       string
+	Web3SignerPubKeyNum int
 }
 
 type Blocks struct {
@@ -57,8 +60,7 @@ type Blocks struct {
 var (
 	ErrJsonRPCNotDefined            = errors.New("json-rpc endpoint not defined")
 	ErrEndBlockNotDefined           = errors.New("end block or block range not defined")
-	ErrToAddrNotProvided            = errors.New("to address not provided")
-	ErrPrivKeyOrMnemonicNotProvided = errors.New("private key or mnemonic not provided")
+	ErrPrivKeyOrMnemonicNotProvided = errors.New("private key, web3signer url or mnemonic not provided")
 	ErrTxHashNotProvided            = errors.New("transaction hash must be provided")
 )
 
@@ -88,7 +90,9 @@ type rawConf struct {
 	txHashes    []string
 	txCostInEth bool
 
-	metricsPort string
+	metricsPort         string
+	web3signerUrl       string
+	web3signerPubKeyNum int
 }
 
 func New() (Conf, error) {
@@ -122,6 +126,8 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.StringVar(&c.txHash, "tx-hashes", "", "comma delimited transaction hashes to get details for")
 	flag.BoolVar(&c.txCostInEth, "tx-cost-eth", false, "present transaction costs in wei instead of eth")
 	flag.StringVar(&c.metricsPort, "metrics-port", "3000", "port where the prometheus metrics will be exposed")
+	flag.StringVar(&c.web3signerUrl, "web3signer-url", "", "url of the web3signer server")
+	flag.IntVar(&c.web3signerPubKeyNum, "web3signer-pubkey-num", 0, "the number of the web3signer public key to use")
 	flag.StringVar(
 		&c.mode,
 		"mode",
@@ -160,6 +166,8 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 		TxHashes:              c.txHashes,
 		TxCostInEth:           c.txCostInEth,
 		MetricsPort:           c.metricsPort,
+		Web3SignerURL:         c.web3signerUrl,
+		Web3SignerPubKeyNum:   c.web3signerPubKeyNum,
 	}, nil
 }
 
@@ -172,11 +180,7 @@ func (c *rawConf) validateRawFlags() error {
 	}
 
 	if c.mode == LongSender.String() {
-		if c.toAddr == "" {
-			return ErrToAddrNotProvided
-		}
-
-		if c.privKey == "" && c.mnemonic == "" {
+		if c.privKey == "" && c.mnemonic == "" && c.web3signerUrl == "" {
 			return ErrPrivKeyOrMnemonicNotProvided
 		}
 	}

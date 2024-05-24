@@ -57,25 +57,11 @@ func TestFlagValidation(t *testing.T) {
 		want     error
 	}{
 		{
-			name:     "Addr and Key and Mnemonic not provided",
-			toAddr:   "",
-			privKey:  "",
-			mnemonic: "",
-			want:     ErrToAddrNotProvided,
-		},
-		{
 			name:     "Addr provided Key and Mnemonic not provided",
 			toAddr:   "0x124155436436",
 			privKey:  "",
 			mnemonic: "",
 			want:     ErrPrivKeyOrMnemonicNotProvided,
-		},
-		{
-			name:     "Addr not provided Key provided",
-			toAddr:   "",
-			privKey:  "jnkdfv-2j42-838yhi9-0u9-0",
-			mnemonic: "",
-			want:     ErrToAddrNotProvided,
 		},
 		{
 			name:    "Both to addr and key provided",

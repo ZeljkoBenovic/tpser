@@ -4,7 +4,7 @@ COPY . /app
 
 WORKDIR /app
 
-RUN go build -ldflags "-s -w" -o tpser .
+RUN go build -ldflags "-s -w" -o tpser main.go
 
 FROM alpine
 

@@ -3,22 +3,23 @@ package longsender
 import (
 	"context"
 	"errors"
-	"github.com/ZeljkoBenovic/tpser/pkg/prom"
-	"golang.org/x/sync/errgroup"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ZeljkoBenovic/tpser/pkg/prom"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/ZeljkoBenovic/tpser/pkg/conf"
 	"github.com/ZeljkoBenovic/tpser/pkg/eth/modes/getblocks"
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txreceipts"
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txsender"
-	"github.com/ZeljkoBenovic/tpser/pkg/eth/tools/txsigner"
+	"github.com/ZeljkoBenovic/tpser/pkg/eth/transactions/txreceipts"
+	"github.com/ZeljkoBenovic/tpser/pkg/eth/transactions/txsender"
+	"github.com/ZeljkoBenovic/tpser/pkg/eth/transactions/txsigner"
 	"github.com/ZeljkoBenovic/tpser/pkg/logger"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-var ErrPrivKeyOrMnemonicNotProvided = errors.New("longsender requires mnemonic or private key")
+var ErrPrivKeyOrMnemonicNotProvided = errors.New("longsender requires mnemonic, public or private key")
 
 type longsender struct {
 	ctx    context.Context
@@ -97,9 +98,15 @@ func (l *longsender) RunMode() error {
 	l.prom.SetTxNumberPerInterval(float64(l.conf.TxPerSec))
 
 	if l.conf.Mnemonic != "" {
+		l.log.Info("Sending transactions using mnemonics")
 		return l.sendTxFromMnemonics()
 	} else if l.conf.PrivateKey != "" {
-		return l.sendTxWithPrivateKey()
+		l.log.Info("Sending transactions using private key")
+		return l.sendTxUsingSingleWallet()
+	} else if l.conf.Web3SignerURL != "" {
+		l.log.Info("Sending transactions using web3signer service")
+		l.signer.UseWeb3Signer()
+		return l.sendTxUsingSingleWallet()
 	} else {
 		return ErrPrivKeyOrMnemonicNotProvided
 	}
@@ -249,7 +256,7 @@ func (l *longsender) initMnemonicAccounts() ([]*txsigner.TxSigner, error) {
 	return signers, nil
 }
 
-func (l *longsender) sendTxWithPrivateKey() error {
+func (l *longsender) sendTxUsingSingleWallet() error {
 	var (
 		firstBlock        uint64
 		lastBlock         uint64
