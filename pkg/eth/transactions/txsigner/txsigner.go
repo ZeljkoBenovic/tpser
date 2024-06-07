@@ -112,27 +112,44 @@ func (t *TxSigner) SetPrivateKey(opts ...SignerOpts) error {
 	}
 
 	if t.conf.Web3SignerURL != "" {
-		resp, err := http.Get(fmt.Sprintf("%s/api/v1/eth1/publicKeys", t.conf.Web3SignerURL))
-		if err != nil {
-			return fmt.Errorf("could not fetch public keys from web3signer: %w", err)
-		}
+		var pubKeyByte []byte
 
-		defer resp.Body.Close()
+		//TODO: save public keys to local storage and parse them from there.
+		// This must be done, as web3signer response is not reliable
+		if t.conf.Web3SignerPublickey == "" {
+			t.log.Debug("Using web3signer key number")
+			resp, err := http.Get(fmt.Sprintf("%s/api/v1/eth1/publicKeys", t.conf.Web3SignerURL))
+			if err != nil {
+				return fmt.Errorf("could not fetch public keys from web3signer: %w", err)
+			}
 
-		rawKeys, _ := io.ReadAll(resp.Body)
+			defer resp.Body.Close()
 
-		if bytes.Contains(rawKeys, []byte("error")) || bytes.Contains(rawKeys, []byte("Error")) {
-			return fmt.Errorf("%s", string(rawKeys))
-		}
+			rawKeys, _ := io.ReadAll(resp.Body)
 
-		keys := make([]string, 0)
-		if err := json.Unmarshal(rawKeys, &keys); err != nil {
-			return err
-		}
+			if bytes.Contains(rawKeys, []byte("error")) || bytes.Contains(rawKeys, []byte("Error")) {
+				return fmt.Errorf("%s", string(rawKeys))
+			}
 
-		pubKeyByte, err := hexutil.Decode(keys[t.conf.Web3SignerPubKeyNum])
-		if err != nil {
-			return err
+			keys := make([]string, 0)
+			if err := json.Unmarshal(rawKeys, &keys); err != nil {
+				return err
+			}
+
+			pubKeyByte, err = hexutil.Decode(keys[t.conf.Web3SignerPubKeyNum])
+			if err != nil {
+				return err
+			}
+
+			t.publicKeyStringFromWeb3Signer = keys[t.conf.Web3SignerPubKeyNum]
+		} else {
+			t.log.Debug("Using the provided public key", "key", t.conf.Web3SignerPublickey)
+			pubKeyByte, err = hexutil.Decode(t.conf.Web3SignerPublickey)
+			if err != nil {
+				return err
+			}
+
+			t.publicKeyStringFromWeb3Signer = t.conf.Web3SignerPublickey
 		}
 
 		if len(pubKeyByte) == 65 && pubKeyByte[0] == 4 {
@@ -141,7 +158,6 @@ func (t *TxSigner) SetPrivateKey(opts ...SignerOpts) error {
 
 		hash := crypto.Keccak256(pubKeyByte)
 		address = common.BytesToAddress(hash[len(hash)-20:])
-		t.publicKeyStringFromWeb3Signer = keys[t.conf.Web3SignerPubKeyNum]
 	} else {
 		pubKey = privKey.Public().(*ecdsa.PublicKey)
 		address = crypto.PubkeyToAddress(*pubKey)

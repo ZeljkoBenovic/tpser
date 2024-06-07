@@ -61,7 +61,7 @@ func (w web3signer) SignTx(tx *types.Transaction, chainID *big.Int, pubKey strin
 
 	w.log.Debug("Signature received from web3signer", "sig", string(rawSig))
 
-	if bytes.Contains(rawSig, []byte("error")) || bytes.Contains(rawSig, []byte("Error")) || bytes.Contains(rawSig, []byte("Resource not found")) {
+	if bytes.Contains(bytes.ToLower(rawSig), []byte("error")) || bytes.Contains(bytes.ToLower(rawSig), []byte("not found")) {
 		return nil, fmt.Errorf("%s", string(rawSig))
 	}
 

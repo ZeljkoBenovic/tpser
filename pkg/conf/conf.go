@@ -49,6 +49,7 @@ type Conf struct {
 
 	Web3SignerURL       string
 	Web3SignerPubKeyNum int
+	Web3SignerPublickey string
 }
 
 type Blocks struct {
@@ -58,10 +59,11 @@ type Blocks struct {
 }
 
 var (
-	ErrJsonRPCNotDefined            = errors.New("json-rpc endpoint not defined")
-	ErrEndBlockNotDefined           = errors.New("end block or block range not defined")
-	ErrPrivKeyOrMnemonicNotProvided = errors.New("private key, web3signer url or mnemonic not provided")
-	ErrTxHashNotProvided            = errors.New("transaction hash must be provided")
+	ErrJsonRPCNotDefined               = errors.New("json-rpc endpoint not defined")
+	ErrEndBlockNotDefined              = errors.New("end block or block range not defined")
+	ErrPrivKeyOrMnemonicNotProvided    = errors.New("private key, web3signer url or mnemonic not provided")
+	ErrTxHashNotProvided               = errors.New("transaction hash must be provided")
+	ErrWeb3PublicKeyOrPubKeyNumMissing = errors.New("public key number or string must be provided")
 )
 
 type rawConf struct {
@@ -93,6 +95,7 @@ type rawConf struct {
 	metricsPort         string
 	web3signerUrl       string
 	web3signerPubKeyNum int
+	web3signerPublicKey string
 }
 
 func New() (Conf, error) {
@@ -127,7 +130,8 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 	flag.BoolVar(&c.txCostInEth, "tx-cost-eth", false, "present transaction costs in wei instead of eth")
 	flag.StringVar(&c.metricsPort, "metrics-port", "3000", "port where the prometheus metrics will be exposed")
 	flag.StringVar(&c.web3signerUrl, "web3signer-url", "", "url of the web3signer server")
-	flag.IntVar(&c.web3signerPubKeyNum, "web3signer-pubkey-num", 0, "the number of the web3signer public key to use")
+	flag.IntVar(&c.web3signerPubKeyNum, "web3signer-pubkey-num", -1, "the number of the web3signer public key to use")
+	flag.StringVar(&c.web3signerPublicKey, "web3signer-public-key", "", "the web3signer public key to use")
 	flag.StringVar(
 		&c.mode,
 		"mode",
@@ -168,6 +172,7 @@ func (c *rawConf) getConfig(test bool) (Conf, error) {
 		MetricsPort:           c.metricsPort,
 		Web3SignerURL:         c.web3signerUrl,
 		Web3SignerPubKeyNum:   c.web3signerPubKeyNum,
+		Web3SignerPublickey:   c.web3signerPublicKey,
 	}, nil
 }
 
@@ -182,6 +187,12 @@ func (c *rawConf) validateRawFlags() error {
 	if c.mode == LongSender.String() {
 		if c.privKey == "" && c.mnemonic == "" && c.web3signerUrl == "" {
 			return ErrPrivKeyOrMnemonicNotProvided
+		}
+	}
+
+	if c.mode == LongSender.String() {
+		if c.web3signerUrl != "" && c.web3signerPublicKey == "" && c.web3signerPubKeyNum == -1 {
+			return ErrWeb3PublicKeyOrPubKeyNumMissing
 		}
 	}
 
